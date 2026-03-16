@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZOOOKA 🐾</title>
+    <title>ЗУЙКА 🐾</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -15,9 +15,8 @@
 
     <div class="container">
 
-        <!-- Главный экран -->
         <div id="main-screen" class="screen active">
-            <h1 class="title">ZOOOKA</h1>
+            <h1 class="title">ЗУЙКА</h1>
             <p class="subtitle">Объединяй одинаковых зверят и создавай самых больших!</p>
             
             <div class="buttons">
@@ -26,7 +25,6 @@
             </div>
         </div>
 
-        <!-- Выбор сложности -->
         <div id="level-screen" class="screen">
             <h2 class="title">Выбери сложность</h2>
             <div class="buttons">
@@ -37,12 +35,11 @@
             <button id="btn-back" class="btn back-btn">НАЗАД</button>
         </div>
 
-        <!-- Модалка обучения -->
         <div id="tutorial-modal" class="modal">
             <div class="tutorial-content">
                 <span class="close" id="tutorial-close">×</span>
                 
-                <h2>Как играть в ZOOOKA</h2>
+                <h2>Как играть в ЗУЙКА</h2>
                 
                 <div class="tutorial-steps">
                     <div class="step">
@@ -68,54 +65,43 @@
             </div>
         </div>
 
-        <!-- Игровой экран -->
         <div id="game-screen" class="screen">
             <div class="game-header">
                 <button id="btn-menu" class="btn back-btn">Меню</button>
-                <div class="game-title">ZOOOKA — <span id="current-difficulty">?</span></div>
-                <div class="score">Счёт: <span id="score-value">0</span></div>
-            </div>
-            
-            <div class="game-container">
-                <div class="danger-zone">
-                    <div class="danger-line-label">ИГРА ОКОНЧЕНА, если перейдёшь сюда ↓</div>
-                    <div class="danger-line thick"></div>
+                <div class="score-area">
+                    <div class="score-label">СЧЁТ</div>
+                    <div class="score-value" id="score-value">0</div>
                 </div>
-                
-                <div class="play-area" id="play-area">
-                    <div class="placeholder">
-                        <div class="animals-preview">
-                            <div class="animal-circle small sheep">🐑</div>
-                            <div class="animal-circle medium cat">🐱</div>
-                            <div class="animal-circle large elephant">🐘</div>
-                            <div class="animal-circle small pig">🐷</div>
-                            <div class="animal-circle medium ram">🐏</div>
-                        </div>
-                        <p class="placeholder-text">Здесь будет игровое поле<br>(canvas появится позже)</p>
+                <div class="next-area">
+                    <div class="next-label">СЛЕДУЮЩИЙ</div>
+                    <div class="next-bubble">
+                        <img id="next-animal-preview" src="images/animals/hamster.png" alt="Следующий" class="next-img">
                     </div>
                 </div>
-                
-                <div class="next-preview">
-                    <div class="next-label">Следующий:</div>
-                    <div class="next-animal" id="next-animal-preview">🐱</div>
+            </div>
+
+            <div class="game-container">
+                <div class="jar-outer">
+                    <div class="jar-inner">
+                        <canvas id="game-canvas" width="380" height="520"></canvas>
+                        <div class="danger-line"></div>
+                        <div class="danger-text">НЕ ПЕРЕСЕКАЙ ЭТУ ЛИНИЮ!</div>
+                    </div>
                 </div>
             </div>
         </div>
-
     </div>
 
-    <!-- Модалка "О проекте" -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <span id="modal-close" class="close">×</span>
-            <h2>О проекте «ZOOOKA»</h2>
+            <h2>О проекте «ЗУЙКА»</h2>
             <p>
-                Браузерная версия игры в стиле Suika Game, но с милыми животными вместо фруктов.<br>
                 Роняй зверят, соединяй одинаковых — получай более крупных и больше очков.<br>
-                Главное — не дать стопке пересечь красную линию!
+                Главное — не дать животным пересечь красную линию!
             </p>
             <h3>Разработчики</h3>
-            <p>Ты + Grok (xAI) ❤️<br>Чистый JavaScript + HTML5 Canvas</p>
+            <p>Савельева Е.А. и Колесник М.В. ❤️<br>Чистый JavaScript + HTML5 Canvas</p>
         </div>
     </div>
 

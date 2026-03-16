@@ -122,7 +122,6 @@ body::after {
     font-size: 1.1rem;
 }
 
-/* Модальные окна */
 .modal {
     display: none;
     position: fixed;
@@ -161,7 +160,6 @@ body::after {
 
 .close:hover { color: #333; }
 
-/* Игровой экран */
 .game-header {
     width: 100%;
     padding: 1rem 1.5rem;
@@ -331,3 +329,35 @@ body::after {
     0%, 100% { transform: translateY(0); }
     50%      { transform: translateY(-18px); }
 }
+
+.next-bubble {
+    width: 90px;
+    height: 90px;
+    background: rgba(255,255,255,0.28);
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.65);
+    box-shadow: 0 5px 18px rgba(0,0,0,0.45),
+                inset 0 4px 12px rgba(255,255,255,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.next-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.animal-img {
+    position: absolute;
+    pointer-events: none; 
+    object-fit: contain;
+}
+
+.level-1 { width: 50px;  height: 50px; } 
+.level-2 { width: 70px;  height: 70px; } 
+.level-3 { width: 95px;  height: 95px; } 
+.level-4 { width: 125px; height: 125px; }
+.level-5 { width: 165px; height: 165px; } 
