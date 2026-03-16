@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Игра — 5 животных</title>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background: #f8f9fa; text-align:center; }
+    #game-screen { max-width: 680px; margin: 20px auto; padding: 15px; background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    #game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 15px; font-size: 1.1rem; }
+    canvas { display: block; margin: 0 auto; background: #f0f4f8; border-radius: 8px; }
+    button { padding: 10px 24px; font-size: 16px; margin: 12px 8px; border: none; border-radius: 8px; cursor: pointer; }
+    #restart { background: #e63946; color: white; }
+  </style>
+</head>
+<body>
+
+  <div id="game-screen">
+    <div id="game-header">
+      <div><strong>Счёт:</strong> <span id="score">0</span></div>
+      <div><strong>Следующее:</strong> <img id="next-animal" width="64" height="64" style="vertical-align:middle; border-radius:50%;"></div>
+    </div>
+    <div id="canvas-container" style="position:relative; width:640px; margin:0 auto;"></div>
+    <button id="restart" onclick="restartGame()" style="display:none;">Играть заново</button>
+  </div>
+
+  <script src="matter.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
