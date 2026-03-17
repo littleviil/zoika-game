@@ -115,7 +115,6 @@ body::after {
 }
 
 .back-btn {
-    margin-top: 2.5rem;
     background: #6c5ce7;
     color: white;
     padding: 0.9rem 2.2rem;
@@ -161,11 +160,9 @@ body::after {
 .close:hover { color: #333; }
 
 .game-header {
-    background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(12px);
-    padding: 12px 20px;
     border-radius: 16px;
-    margin-bottom: 10px;
+    flex-shrink: 0;
 }
 
 .game-title { font-weight: bold; }
@@ -178,16 +175,28 @@ body::after {
 }
 
 .game-container {
-    width: 100%;
-    max-width: 620px;           /* чуть уже, чтобы выглядело элегантнее */
-    margin: 1.5rem auto;
     position: relative;
+    width: 100%;
+    max-width: 620px;           /* или твоё значение */
+    margin: 0 auto;
+    height: 100vh;              /* или calc(100vh - 20px), если есть шапка */
+    box-sizing: border-box;
+    overflow: hidden;           /* на всякий случай */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* или center, смотря по дизайну */
+    align-items: center;
+    padding: 1rem 0;            /* маленькие отступы, но без переполнения */
 }
 
 .danger-zone {
-    position: relative;
-    height: 80px;
-    margin-top: -10px;          /* чуть поднимаем, чтобы линия была ближе к верху */
+    position: absolute;
+    top: 60px;                  /* или сколько нужно от верха */
+    left: 0;
+    right: 0;
+    height: 6px;
+    pointer-events: none;
+    z-index: 5;
 }
 
 .danger-line-label {
@@ -207,13 +216,11 @@ body::after {
 }
 
 .play-area {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none;
-    border-radius: 20px;
-    overflow: hidden;
-    min-height: 650px;
     position: relative;
+    width: 100%;
+    flex: 1;                    /* ← займёт всё оставшееся пространство */
+    max-height: calc(100vh - 180px);  /* пример: отнимаем высоту счёта + кнопок + опасной зоны */
+    overflow: hidden;
 }
 
 .placeholder {
@@ -356,7 +363,6 @@ body::after {
     position: relative;
     width: 100%;
     aspect-ratio: 2 / 3;       /* сохраняем пропорции */
-    overflow: hidden;
     border-radius: 16px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.1);
 }
