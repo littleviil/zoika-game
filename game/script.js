@@ -1,16 +1,16 @@
 const ANIMALS = [
-  { radius: 15,  scoreValue: 1,   path: "../images/animals/hamster.png" },
-  { radius: 20,  scoreValue: 3,   path: "../images/animals/cat.png" },
-  { radius: 25,  scoreValue: 6,   path: "../images/animals/pig.png" },
-  { radius: 30,  scoreValue: 12,  path: "../images/animals/sheep.png" },
-  { radius: 35,  scoreValue: 25,  path: "../images/animals/elephant.png" }
+  { visualRadius: 15, physicsRadius: 24, scoreValue: 1,   path: "../images/animals/hamster.png" },
+  { visualRadius: 20, physicsRadius: 32, scoreValue: 3,   path: "../images/animals/cat.png" },
+  { visualRadius: 25, physicsRadius: 40, scoreValue: 6,   path: "../images/animals/pig.png" },
+  { visualRadius: 30, physicsRadius: 48, scoreValue: 12,  path: "../images/animals/sheep.png" },
+  { visualRadius: 35, physicsRadius: 56, scoreValue: 25,  path: "../images/animals/elephant.png" }
 ];
 
 const GAME = {
     WIDTH: 540,
     HEIGHT: 650,
     DROP_Y: 92,                    // чуть ниже, чтобы было комфортнее
-    GAME_OVER_LINE_Y: 100,         // ← БЫЛО 145, СТАЛО 205 (главный фикс)
+    GAME_OVER_LINE_Y: 490,         // ← БЫЛО 145, СТАЛО 205 (главный фикс)
     MAX_ANIMAL_INDEX: ANIMALS.length - 1,
     
     engine: null,
@@ -49,47 +49,58 @@ function preloadTextures(callback) {
 function createWallsAndFloor() {
     const staticOptions = {
         isStatic: true,
-        friction: 0.8,
-        restitution: 0.1,
-        render: {
-            visible: false  
-        }
+        friction: 1.0,          // максимум
+        frictionStatic: 1.5,    // сильно помогает стопке не разъезжаться
+        restitution: 0.02,      // почти никакого отскока от границ
+        render: { visible: false }
     };
 
-    const floor = Matter.Bodies.rectangle(GAME.WIDTH / 2, GAME.HEIGHT + 40, GAME.WIDTH * 1.4, 120, staticOptions);
-    const leftWall = Matter.Bodies.rectangle(-40, GAME.HEIGHT / 2, 100, GAME.HEIGHT * 1.4, staticOptions);
-    const rightWall = Matter.Bodies.rectangle(GAME.WIDTH + 40, GAME.HEIGHT / 2, 100, GAME.HEIGHT * 1.4, staticOptions);
+    const floor = Matter.Bodies.rectangle(
+        GAME.WIDTH / 2, 
+        GAME.HEIGHT + 35, 
+        GAME.WIDTH * 1.45, 
+        90, 
+        staticOptions
+    );
+
+    const leftWall = Matter.Bodies.rectangle(-45, GAME.HEIGHT / 2, 90, GAME.HEIGHT * 1.5, staticOptions);
+    const rightWall = Matter.Bodies.rectangle(GAME.WIDTH + 45, GAME.HEIGHT / 2, 90, GAME.HEIGHT * 1.5, staticOptions);
 
     Matter.Composite.add(GAME.engine.world, [floor, leftWall, rightWall]);
 }
 
 function createAnimal(x, y, typeIndex, isStatic = false) {
-  const def = ANIMALS[typeIndex];
-  const options = {
-    restitution: 0.18,
-    friction: 0.008,
-    density: 0.65,
-    frictionAir: 0.005
-  };
-  
-  if (GAME.textures[typeIndex]) {
-    options.render = {
-      sprite: {
-        texture: GAME.textures[typeIndex],
-        xScale: (def.radius * 2) / 256,
-        yScale: (def.radius * 2) / 256
-      }
+    const def = ANIMALS[typeIndex];
+
+    const options = {
+        restitution: 0.18,          // ↓ сильно уменьшаем отскок
+        friction: 0.9,              // ↑ почти максимум
+        frictionStatic: 1.2,        // добавляем — важно для покоя
+        frictionAir: 0.015,         // чуть меньше, чтобы не тормозило слишком сильно в воздухе
+        density: 0.0008,            // ↓ уменьшаем плотность → легче "ложатся"
+        slop: 0.01,                 // меньше "проваливания"
+        inertia: Infinity,          // оставляем — хорошо против вращения
+        render: {}
     };
-  } else {
-    // Fallback: цветной круг, если текстура не загрузилась
-    options.render = { fillStyle: `hsl(${typeIndex * 72}, 70%, 50%)` };
-  }
-  
-  const body = Matter.Bodies.circle(x, y, def.radius, options);
-  body.animalType = typeIndex;
-  body.isStatic = isStatic;
-  
-  return body;
+
+    if (GAME.textures[typeIndex]) {
+        const visualDiameter = def.visualRadius * 2;
+        options.render.sprite = {
+            texture: GAME.textures[typeIndex],
+            xScale: visualDiameter / 256,
+            yScale: visualDiameter / 256
+        };
+    } else {
+        options.render.fillStyle = `hsl(${typeIndex * 72}, 70%, 50%)`;
+    }
+
+    // ← Вот где физический радиус больше визуального
+    const body = Matter.Bodies.circle(x, y, def.physicsRadius, options);
+
+    body.animalType = typeIndex;
+    body.isStatic = isStatic;
+
+    return body;
 }
 
 function spawnNextAnimal() {
@@ -109,67 +120,101 @@ function updateNextPreview() {
 }
 
 function dropCurrentAnimal() {
-  if (!GAME.currentAnimal || GAME.gameOver || !GAME.currentAnimal.isStatic) return;
-  
-  GAME.currentAnimal.isStatic = false;
-  GAME.animalsInPlay.push(GAME.currentAnimal);
-  GAME.currentAnimal = null;
-  
-  setTimeout(spawnNextAnimal, 320);
+    if (!GAME.currentAnimal || GAME.gameOver || !GAME.currentAnimal.isStatic) return;
+
+    GAME.currentAnimal.isStatic = false;
+    GAME.animalsInPlay.push(GAME.currentAnimal);
+    GAME.currentAnimal = null;
+
+    // Самое важное: отключаем проверку Game Over на время падения этого животного
+    GAME.allowGameOverCheck = false;
+
+    // Включаем обратно через 800–1200 мс (в зависимости от гравитации и высоты)
+    setTimeout(() => {
+        GAME.allowGameOverCheck = true;
+    }, 1000);   // 1000 мс — хороший баланс для твоей гравитации 1.12
+
+    setTimeout(spawnNextAnimal, 400);   // можно чуть быстрее, 300–500 мс
 }
 
 function handleCollisions() {
   Matter.Events.on(GAME.engine, "collisionStart", (event) => {
+    // если игра уже закончена — ничего не делаем
     if (GAME.gameOver) return;
-    
+
     for (const pair of event.pairs) {
       const { bodyA, bodyB } = pair;
-      
-      if (!bodyA.animalType || !bodyB.animalType) continue;
+
+      // пропускаем, если хотя бы одно тело — не животное
+      if (!bodyA?.animalType || !bodyB?.animalType) continue;
+
+      // сливаем только одинаковые типы
       if (bodyA.animalType !== bodyB.animalType) continue;
+
+      // не сливаем максимальный уровень
       if (bodyA.animalType >= GAME.MAX_ANIMAL_INDEX) continue;
-      
+
+      // защита от множественного слияния одного и того же тела
       if (bodyA.isMerging || bodyB.isMerging) continue;
+
+      // помечаем тела как находящиеся в процессе слияния
       bodyA.isMerging = bodyB.isMerging = true;
-      
+
       const newType = bodyA.animalType + 1;
+
+      // берём среднюю точку между двумя животными
       const midX = (bodyA.position.x + bodyB.position.x) / 2;
       const midY = (bodyA.position.y + bodyB.position.y) / 2;
-      
+
+      // удаляем старые тела
       Matter.Composite.remove(GAME.engine.world, [bodyA, bodyB]);
-      
-      const newAnimal = createAnimal(midX, midY, newType);
+
+      // создаём новое животное
+      const newAnimal = createAnimal(midX, midY, newType, false);
+
+      // сразу убираем остаточную скорость и вращение — это сильно уменьшает хаос после слияния
+      Matter.Body.setVelocity(newAnimal, { x: 0, y: 0 });
+      Matter.Body.setAngularVelocity(newAnimal, 0);
+
+      // можно слегка сдвинуть вниз, чтобы новое животное не "всплывало" (опционально)
+      // Matter.Body.translate(newAnimal, { x: 0, y: 8 });
+
+      // добавляем в мир и в массив активных животных
       Matter.Composite.add(GAME.engine.world, newAnimal);
       GAME.animalsInPlay.push(newAnimal);
-      
+
       GAME.score += ANIMALS[newType].scoreValue * 2;
       document.getElementById("score").textContent = GAME.score;
-      
+
       setTimeout(() => {
-        bodyA.isMerging = bodyB.isMerging = false;
-      }, 100);
+        bodyA.isMerging = false;
+        bodyB.isMerging = false;
+      }, 120);
     }
   });
 }
 
 function checkGameOver() {
     if (GAME.gameOver || !GAME.allowGameOverCheck) return;
+    if (GAME.animalsInPlay.length === 0) return;
 
     for (const animal of GAME.animalsInPlay) {
         if (!animal) continue;
 
-        // Проверяем только тех, кто действительно выше красной линии
+        // Игнорируем верхнюю зону (спавн + запас на отскок)
+        if (animal.position.y < GAME.DROP_Y + 120) continue;   // ← важно!
+
         if (animal.position.y < GAME.GAME_OVER_LINE_Y) {
-            
-            // Дополнительная защита: если животное ещё быстро падает — не считаем проигрыш
             const speedY = Math.abs(animal.velocity.y);
-            if (speedY < 3.5) {   // почти остановилось или застряло наверху
+
+            // Если скорость маленькая → почти остановилось наверху → проигрыш
+            if (speedY < 2.8) {          // было 3.5 → можно опустить до 2.5–3.0
                 GAME.gameOver = true;
                 document.getElementById("restart").style.display = "inline-block";
-                
+
                 setTimeout(() => {
                     alert(`Игра окончена!\n\nВаш счёт: ${GAME.score}`);
-                }, 250);
+                }, 300);
                 return;
             }
         }
@@ -184,14 +229,20 @@ function initPhysics() {
   
   GAME.render = Matter.Render.create({
     element: container,
-    engine: GAME.engine,
-    options: {
-      width: GAME.WIDTH,
-      height: GAME.HEIGHT,
-      wireframes: false,
-      background: "#f0f4f8"
-    }
+      engine: GAME.engine,
+      options: {
+          width: GAME.WIDTH,
+          height: GAME.HEIGHT,
+          wireframes: false,
+          background: 'transparent',           // ← главное изменение
+          wireframeBackground: 'transparent',  // на случай переключения в wireframe-режим
+          showAngleIndicator: false,
+          showCollisions: false,           
+          showVelocity: false
+      }
   });
+  GAME.render.canvas.style.background = 'transparent';
+  GAME.render.canvas.style.backgroundColor = 'transparent';
   
   GAME.runner = Matter.Runner.create();
   Matter.Render.run(GAME.render);
@@ -234,11 +285,11 @@ function startGame() {
     spawnNextAnimal();
     setupControls();
 
-    // Включаем проверку Game Over только через 1.3 секунды
-    // (даём первому животному спокойно упасть и отскочить)
-    setTimeout(() => {
-        GAME.allowGameOverCheck = true;
-    }, 1300);
+    // // Включаем проверку Game Over только через 1.3 секунды
+    // // (даём первому животному спокойно упасть и отскочить)
+    // setTimeout(() => {
+    //     GAME.allowGameOverCheck = true;
+    // }, 1300);
 
     Matter.Events.on(GAME.engine, "afterUpdate", checkGameOver);
 }
