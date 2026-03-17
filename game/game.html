@@ -5,12 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Игра — 5 животных</title>
   <style>
-    body { margin:0; font-family: Arial, sans-serif; background: #f8f9fa; text-align:center; }
-    #game-screen { max-width: 500px; margin: 20px auto; padding: 15px; background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    body { margin:0; font-family: Arial, sans-serif; background: transparent; text-align:center; }
+    #game-screen { max-width: 550px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
     #game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 15px; font-size: 1.1rem; }
-    canvas { display: block; margin: 0 auto; background: #f0f4f800; border-radius: 8px; }
+    canvas { display: block; margin: 0 auto; background: transparent !important; border-radius: 8px; }
     button { padding: 10px 24px; font-size: 16px; margin: 12px 8px; border: none; border-radius: 8px; cursor: pointer; }
-    #restart { background: #e63946; color: white; }
+    #restart {
+        background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+        color: white;
+        padding: 14px 32px;
+        font-size: 1.3rem;
+        border-radius: 999px;
+        box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+        transition: all 0.3s ease;
+    }
+    #restart:hover { transform: scale(1.08) translateY(-3px); }
   </style>
 </head>
 <body>
@@ -25,7 +34,7 @@
         width: 100%;
         height: 0;
         padding-bottom: 150%;           /* 960 / 640 = 1.5 → 150% */
-        background: #f0f4f8;
+        background: transparent;
         border-radius: 0 0 12px 12px;
         overflow: hidden;
     "></div>
