@@ -1,16 +1,16 @@
 const ANIMALS = [
-  { visualRadius: 15, physicsRadius: 24, scoreValue: 1,   path: "../images/animals/hamster.png" },
-  { visualRadius: 20, physicsRadius: 32, scoreValue: 3,   path: "../images/animals/cat.png" },
-  { visualRadius: 25, physicsRadius: 40, scoreValue: 6,   path: "../images/animals/pig.png" },
-  { visualRadius: 30, physicsRadius: 48, scoreValue: 12,  path: "../images/animals/sheep.png" },
-  { visualRadius: 35, physicsRadius: 56, scoreValue: 25,  path: "../images/animals/elephant.png" }
+  { visualRadius: 6, physicsRadius: 24, scoreValue: 1,   path: "../images/animals/hamster.png" },
+  { visualRadius: 8, physicsRadius: 32, scoreValue: 3,   path: "../images/animals/cat.png" },
+  { visualRadius: 10, physicsRadius: 40, scoreValue: 6,   path: "../images/animals/pig.png" },
+  { visualRadius: 12, physicsRadius: 48, scoreValue: 12,  path: "../images/animals/sheep.png" },
+  { visualRadius: 14, physicsRadius: 56, scoreValue: 25,  path: "../images/animals/elephant.png" }
 ];
 
 const GAME = {
     WIDTH: 540,
     HEIGHT: 650,
     DROP_Y: 92,                    // чуть ниже, чтобы было комфортнее
-    GAME_OVER_LINE_Y: 490,         // ← БЫЛО 145, СТАЛО 205 (главный фикс)
+    GAME_OVER_LINE_Y: 100,         // ← БЫЛО 145, СТАЛО 205 (главный фикс)
     MAX_ANIMAL_INDEX: ANIMALS.length - 1,
     
     engine: null,
@@ -183,6 +183,7 @@ function handleCollisions() {
       Matter.Composite.add(GAME.engine.world, newAnimal);
       GAME.animalsInPlay.push(newAnimal);
 
+      // начисляем очки
       GAME.score += ANIMALS[newType].scoreValue * 2;
       document.getElementById("score").textContent = GAME.score;
 
