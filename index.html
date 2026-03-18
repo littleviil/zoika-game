@@ -11,8 +11,15 @@
 </head>
 <body>
 
-    <video autoplay muted loop playsinline id="bg-video">
-        <source src="videos/bg_main.mp4" type="video/mp4">
+    <video 
+        autoplay 
+        muted 
+        loop 
+        playsinline 
+        id="bg-video"
+        disablePictureInPicture controlsList="nodownload nofullscreen"
+        >
+        <source src="videos/bg_main.MP4" type="video/mp4">
         Твой браузер не поддерживает видео.
     </video>
 
@@ -23,62 +30,95 @@
             <p class="subtitle">Объединяй одинаковых зверят и создавай самых больших!</p>
             
             <div class="buttons">
-                <button id="btn-start" class="btn primary">НАЧАТЬ ИГРУ</button>
-                <button id="btn-about" class="btn secondary">О ПРОЕКТЕ</button>
+                <button id="btn-start" class="btn primary">🐾 Начать игру</button>
+                <button id="btn-about" class="btn secondary">💡 О проекте</button>
             </div>
         </div>
 
         <div id="level-screen" class="screen">
             <h2 class="title">Выбери сложность</h2>
-            <div class="buttons">
-                <button data-level="easy"   class="btn level-btn">🐭 Лёгкий</button>
-                <button data-level="medium" class="btn level-btn">🐱 Средний</button>
-                <button data-level="hard"   class="btn level-btn">🐶 Сложный</button>
+            <div class="level-cards">
+                <button data-level="easy" class="level-card easy-card">
+                    <img src="images/animals/hamster.png" class="level-card-img" alt="">
+                    <div class="level-card-info">
+                        <span class="level-card-name">Лёгкий</span>
+                        <span class="level-card-desc">Маленькие зверята — больше места</span>
+                    </div>
+                    <span class="level-card-stars">⭐</span>
+                </button>
+                <button data-level="medium" class="level-card medium-card">
+                    <img src="images/animals/cat.png" class="level-card-img" alt="">
+                    <div class="level-card-info">
+                        <span class="level-card-name">Средний</span>
+                        <span class="level-card-desc">Зверята крупнее — теснее</span>
+                    </div>
+                    <span class="level-card-stars">⭐⭐</span>
+                </button>
+                <button data-level="hard" class="level-card hard-card">
+                    <img src="images/animals/elephant.png" class="level-card-img" alt="">
+                    <div class="level-card-info">
+                        <span class="level-card-name">Сложный</span>
+                        <span class="level-card-desc">Огромные зверята — почти нет места!</span>
+                    </div>
+                    <span class="level-card-stars">⭐⭐⭐</span>
+                </button>
             </div>
-            <button id="btn-back" class="btn back-btn">НАЗАД</button>
+            <button id="btn-back" class="btn back-btn">← Назад</button>
         </div>
 
         <div id="tutorial-modal" class="modal">
             <div class="tutorial-content">
                 <span class="close" id="tutorial-close">×</span>
-                
-                <h2>Как играть в ЗУЙКА</h2>
-                
+
+                <h2 class="tutorial-title">🐾 Как играть</h2>
+
                 <div class="tutorial-steps">
-                    <div class="step">
-                        <div class="step-emoji">🐱 → 🐱 = 🐈</div>
-                        <p>Два одинаковых зверька соединяются → появляется зверёк следующего уровня</p>
+                    <div class="tut-step">
+                        <div class="tut-animals">
+                            <img src="images/animals/hamster.png" alt="">
+                            <span class="tut-plus">+</span>
+                            <img src="images/animals/hamster.png" alt="">
+                            <span class="tut-arrow">→</span>
+                            <img src="images/animals/cat.png" alt="">
+                        </div>
+                        <p>Два одинаковых зверька сливаются в одного крупнее</p>
                     </div>
-                    
-                    <div class="step">
-                        <div class="step-emoji">🐈 → 🐈 = 🦁</div>
-                        <p>Чем больше комбинаций — тем крупнее и дороже животные!</p>
+
+                    <div class="tut-step">
+                        <div class="tut-animals">
+                            <img src="images/animals/cat.png" alt="">
+                            <span class="tut-plus">+</span>
+                            <img src="images/animals/cat.png" alt="">
+                            <span class="tut-arrow">→</span>
+                            <img src="images/animals/pig.png" alt="">
+                        </div>
+                        <p>Чем крупнее зверёк — тем больше очков!</p>
                     </div>
-                    
-                    <div class="step warning">
-                        <div class="danger-line-preview"></div>
+
+                    <div class="tut-step tut-warning">
+                        <div class="tut-danger-line"></div>
                         <p>Не дай животным пересечь <strong>красную линию</strong> — игра закончится!</p>
                     </div>
                 </div>
-                
+
                 <div class="tutorial-actions">
-                    <button id="btn-change-level" class="btn secondary">Сменить уровень</button>
-                    <button id="btn-start-game" class="btn primary">Начать!</button>
+                    <button id="btn-change-level" class="tut-btn tut-btn-secondary">← Сменить уровень</button>
+                    <button id="btn-start-game" class="tut-btn tut-btn-primary">Начать! 🐾</button>
                 </div>
             </div>
         </div>
 
         <div id="game-screen" class="screen">
-            <div class="game-header">
-                <button id="btn-menu" class="btn back-btn">Меню</button>
+            <div class="game-header" style="display:flex;gap:10px;padding:8px 12px;">
+                <button id="btn-menu" class="btn back-btn" style="flex:1">← Меню</button>
+                <button id="btn-restart-top" class="btn back-btn" style="flex:1">↺ Заново</button>
             </div> 
             <div class="game-container">
-                <div class="iframe-wrapper" style="transform: scale(0.65); transform-origin: top center;">
-                    <iframe 
-                        src="game/game.html" 
+                <div class="iframe-wrapper">
+                    <iframe
+                        src="game/game.html"
                         title="Zoika Game"
                         allowfullscreen
-                        style="width: 100%; height: 100%; border: none;"
                     ></iframe>
                 </div>
             </div>

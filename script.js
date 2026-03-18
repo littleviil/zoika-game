@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStart       = document.getElementById('btn-start');
     const btnAbout       = document.getElementById('btn-about');
     const btnBack        = document.getElementById('btn-back');
-    const levelButtons   = document.querySelectorAll('#level-screen .level-btn');
+    const levelButtons   = document.querySelectorAll('#level-screen .level-card');
     const btnMenu        = document.getElementById('btn-menu');
     const modalClose     = document.getElementById('modal-close');
     const tutorialClose  = document.getElementById('tutorial-close');
@@ -29,6 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: 'sheep',    src: 'images/animals/sheep.png',    size: 125, points: 16  },
         { name: 'elephant', src: 'images/animals/elephant.png', size: 165, points: 32  }
     ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const video = document.getElementById('bg-video');
+        if (video) {
+            video.disablePictureInPicture = true;
+        }
+    });
 
 
     function showScreen(el) {
@@ -115,7 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnStartGame?.addEventListener('click', () => {
         hideModal(tutorialModal);
         showScreen(gameScreen);
-        setTimeout(startGamePreview, 150);
+        const iframe = document.querySelector('.iframe-wrapper iframe');
+        if (iframe) iframe.src = `game/game.html?level=${currentLevel}&t=${Date.now()}`;
     });
 
     btnChangeLevel?.addEventListener('click', () => hideModal(tutorialModal));
@@ -123,6 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
     tutorialModal?.addEventListener('click', e => { if (e.target === tutorialModal) hideModal(tutorialModal); });
 
     btnMenu?.addEventListener('click', () => showScreen(mainScreen));
+
+    document.getElementById('btn-restart-top')?.addEventListener('click', () => {
+        const iframe = document.querySelector('.iframe-wrapper iframe');
+        if (iframe) iframe.src = `game/game.html?level=${currentLevel}&t=${Date.now()}`;
+    });
 
     showScreen(mainScreen);
     updateDifficulty('medium');

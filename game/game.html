@@ -3,76 +3,149 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Игра — 5 животных</title>
+  <title>ЗУЙКА</title>
   <style>
-    html { overflow: hidden; max-height: 100vh !important; overscroll-behavior: none !important; }
-    body { margin:0; font-family: Arial, sans-serif; overflow: hidden !important; max-height: 100vh !important; overscroll-behavior: none !important;  background: transparent; text-align:center; }
-    #game-screen { border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
-    #game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 15px; font-size: 1.1rem; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    /* Весь экран — игровой контейнер */
+    #canvas-container {
+      position: relative;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+
+    /* Matter.js canvas — заполняет контейнер */
     canvas {
-        width: 100% !important;
-        max-height: inherit;
-        display: block;
-        background: transparent;
-        position: absolute;
-        z-index: 3;
-        align-items: flex-end;
+      position: absolute !important;
+      top: 0 !important; left: 0 !important;
+      width: 100% !important; height: 100% !important;
+      display: block !important;
+      z-index: 1 !important;
     }
-    button { padding: 10px 24px; font-size: 16px; margin: 12px 8px; border: none; border-radius: 8px; cursor: pointer; }
-    #restart {
-        background: linear-gradient(135deg, #ff6b6b, #ff8e53);
-        color: white;
-        padding: 14px 32px;
-        font-size: 1.3rem;
-        border-radius: 999px;
-        box-shadow: 0 8px 25px rgba(255, 107, 107, 0.649);
-        transition: all 0.3s ease;
+
+    /* ── Шапка ─────────────────────────────── */
+    #ui-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      pointer-events: none;
     }
-    #restart:hover { transform: scale(1.08) translateY(-3px); }
-    .basket-overlay {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        z-index: 2;
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        height: 700px;
-        margin-left: 31px;
+
+    #game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: rgba(0,0,0,0.38);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #fff;
+      font-weight: 700;
+      pointer-events: auto;
     }
-    .basket-image {
-        width: 85%; 
-        max-width: 700px;
-        height: auto;
-        object-fit: contain;
+
+    #score-label { font-size: 0.78rem; opacity: 0.8; margin-bottom: 1px; }
+    #score       { font-size: 1.5rem; color: #ffe066; line-height: 1; }
+
+    #next-block {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.82rem;
+    }
+    #next-animal {
+      width: 48px; height: 48px;
+      border-radius: 50%; object-fit: contain;
+      background: rgba(255,255,255,0.15);
+      padding: 2px;
+    }
+
+    /* ── Экран конца игры ───────────────────── */
+    #gameover-screen {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      color: #fff;
+      gap: 20px;
+      border-radius: 14px;
+    }
+    #gameover-screen.show { display: flex; }
+
+    #gameover-screen h2 {
+      font-size: 2rem;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    #gameover-score-label {
+      font-size: 1rem; opacity: 0.75;
+    }
+    #gameover-score-value {
+      font-size: 3rem; font-weight: 900;
+      color: #ffe066;
+      text-shadow: 0 0 20px rgba(255,220,50,0.7);
+      line-height: 1;
+    }
+    #btn-restart {
+      margin-top: 8px;
+      padding: 14px 40px;
+      font-size: 1.15rem; font-weight: 700;
+      border: none; border-radius: 999px; cursor: pointer;
+      background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+      color: #fff;
+      box-shadow: 0 6px 24px rgba(255,90,70,0.55);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #btn-restart:hover {
+      transform: scale(1.07) translateY(-2px);
+      box-shadow: 0 10px 30px rgba(255,90,70,0.7);
     }
   </style>
 </head>
 <body>
+<div id="canvas-container">
 
-  <div id="game-screen">
+  <!-- Matter.js добавит canvas сюда (z-index 1) -->
+
+  <!-- Шапка: счёт + следующее -->
+  <div id="ui-overlay">
     <div id="game-header">
-      <div><strong>Счёт:</strong> <span id="score">0</span></div>
-      <div><strong>Следующее:</strong> <img id="next-animal" width="64" height="64" style="vertical-align:middle; border-radius:50%;"></div>
+      <div>
+        <div id="score-label">Счёт</div>
+        <div id="score">0</div>
+      </div>
+      <div id="next-block">
+        <span>Следующий:</span>
+        <img id="next-animal" alt="">
+      </div>
     </div>
-    <div id="canvas-container" style="
-        position: relative;
-        width: 100%;
-        height: 0;
-        padding-bottom: 150%;           /* 960 / 640 = 1.5 → 150% */
-        background: transparent;
-        border-radius: 0 0 12px 12px;
-        overflow: hidden;
-    "> <canvas id="game-canvas"></canvas>
-    <img 
-        src="../images/game-area.png" 
-        alt="Корзина" 
-        class="basket-overlay"
-    ></div>
-    <button id="restart" onclick="restartGame()" style="display:none;">Играть заново</button>
   </div>
 
-  <script src="matter.js"></script>
-  <script src="script.js"></script>
+  <!-- Экран конца игры -->
+  <div id="gameover-screen">
+    <div>🐾</div>
+    <h2>Игра окончена!</h2>
+    <div>
+      <div id="gameover-score-label">Ваш счёт</div>
+      <div id="gameover-score-value">0</div>
+    </div>
+    <button id="btn-restart" onclick="restartGame()">Играть заново</button>
+  </div>
+
+</div>
+<script src="matter.js"></script>
+<script src="script.js"></script>
 </body>
 </html>

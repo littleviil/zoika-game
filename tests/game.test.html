@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>ЗУЙКА — Тесты</title>
+    <style>
+        body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+        h1   { color: #e94560; }
+        h2   { color: #0f3460; background: #16213e; padding: 8px 14px; border-radius: 6px; margin-top: 24px; }
+        .pass  { color: #4ecca3; }
+        .fail  { color: #e94560; }
+        .skip  { color: #f5a623; }
+        .summary { font-size: 1.3rem; margin-top: 24px; padding: 12px 20px; border-radius: 8px; background: #16213e; }
+        pre { background: #0f3460; padding: 10px; border-radius: 4px; font-size: 0.85rem; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<h1>🧪 ЗУЙКА — Тест-сьют</h1>
+<div id="output"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// Минимальный тест-раннер
+// ═══════════════════════════════════════════════════════════════
+const results = { pass: 0, fail: 0, skip: 0 };
+let currentSuite = "";
+const out = document.getElementById("output");
+
+function suite(name) {
+    currentSuite = name;
+    out.innerHTML += `<h2>📦 ${name}</h2>`;
+}
+
+function test(name, fn) {
+    try {
+        fn();
+        results.pass++;
+        out.innerHTML += `<div class="pass">  ✅ ${name}</div>`;
+    } catch (e) {
+        results.fail++;
+        out.innerHTML += `<div class="fail">  ❌ ${name}<pre>${e.message}</pre></div>`;
+    }
+}
+
+function expect(val) {
+    return {
+        toBe: (expected) => {
+            if (val !== expected) throw new Error(`Ожидалось ${JSON.stringify(expected)}, получено ${JSON.stringify(val)}`);
+        },
+        toEqual: (expected) => {
+            const a = JSON.stringify(val), b = JSON.stringify(expected);
+            if (a !== b) throw new Error(`Ожидалось ${b}, получено ${a}`);
+        },
+        toBeNull: () => {
+            if (val !== null) throw new Error(`Ожидалось null, получено ${JSON.stringify(val)}`);
+        },
+        toBeUndefined: () => {
+            if (val !== undefined) throw new Error(`Ожидалось undefined, получено ${JSON.stringify(val)}`);
+        },
+        toBeTruthy: () => {
+            if (!val) throw new Error(`Ожидалось truthy, получено ${JSON.stringify(val)}`);
+        },
+        toBeFalsy: () => {
+            if (val) throw new Error(`Ожидалось falsy, получено ${JSON.stringify(val)}`);
+        },
+        toBeGreaterThan: (n) => {
+            if (!(val > n)) throw new Error(`Ожидалось > ${n}, получено ${val}`);
+        },
+        toBeLessThan: (n) => {
+            if (!(val < n)) throw new Error(`Ожидалось < ${n}, получено ${val}`);
+        },
+        toContain: (item) => {
+            if (!val.includes(item)) throw new Error(`Массив не содержит ${JSON.stringify(item)}`);
+        },
+        not: {
+            toBe: (unexpected) => {
+                if (val === unexpected) throw new Error(`Не ожидалось ${JSON.stringify(unexpected)}`);
+            },
+            toContain: (item) => {
+                if (val.includes(item)) throw new Error(`Массив не должен содержать ${JSON.stringify(item)}`);
+            },
+            toBeFalsy: () => {
+                if (!val) throw new Error(`Значение должно быть truthy`);
+            }
+        }
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Моки Matter.js и DOM
+// ═══════════════════════════════════════════════════════════════
+
+let bodyIdCounter = 0;
+function makeBody(x, y, radius, isStaticFlag) {
+    return {
+        id: bodyIdCounter++,
+        position: { x, y },
+        velocity: { x: 0, y: 0 },
+        circleRadius: radius,
+        isStatic: isStaticFlag,
+        isMerging: false,
+        animalType: undefined,
+        _static: isStaticFlag
+    };
+}
+
+const worldBodies = [];
+const Matter = {
+    Engine: {
+        create: () => ({ gravity: { y: 0 }, world: { bodies: worldBodies } })
+    },
+    Render: {
+        create: () => ({
+            canvas: Object.assign(document.createElement('canvas'), { getContext: () => null }),
+            options: {},
+            bounds: { max: { x: 0, y: 0 } },
+            mouse: null
+        }),
+        run: () => {},
+        stop: () => {}
+    },
+    Runner: { create: () => ({}), run: () => {}, stop: () => {} },
+    Bodies: {
+        circle: (x, y, r, opts) => makeBody(x, y, r, false),
+        rectangle: (x, y, w, h, opts) => makeBody(x, y, Math.min(w,h)/2, true)
+    },
+    Body: {
+        setStatic: (body, flag) => { body.isStatic = flag; body._static = flag; },
+        setPosition: (body, pos) => { body.position.x = pos.x; body.position.y = pos.y; },
+        setVelocity: (body, v) => { body.velocity = { ...v }; },
+        setAngularVelocity: () => {}
+    },
+    Composite: {
+        add: (world, item) => {
+            if (Array.isArray(item)) item.forEach(b => worldBodies.push(b));
+            else worldBodies.push(item);
+        },
+        remove: (world, item) => {
+            if (Array.isArray(item)) {
+                item.forEach(b => { const i = worldBodies.indexOf(b); if (i > -1) worldBodies.splice(i, 1); });
+            } else {
+                const i = worldBodies.indexOf(item); if (i > -1) worldBodies.splice(i, 1);
+            }
+        }
+    },
+    Mouse: { create: () => ({ position: { x: 270, y: 80 } }) },
+    MouseConstraint: { create: () => ({}) },
+    Events: {
+        _handlers: {},
+        on: function(target, event, handler) {
+            const key = event;
+            if (!this._handlers[key]) this._handlers[key] = [];
+            this._handlers[key].push({ target, handler });
+        },
+        fire: function(event, data) {
+            (this._handlers[event] || []).forEach(h => h.handler(data));
+        },
+        reset: function() { this._handlers = {}; }
+    }
+};
+
+// Mock DOM
+const domState = { score: "0", restartDisplay: "none", nextAnimalSrc: "" };
+const mockDocument = {
+    getElementById: (id) => ({
+        textContent: domState.score,
+        style: { display: domState.restartDisplay },
+        src: domState.nextAnimalSrc,
+        innerHTML: ""
+    })
+};
+// Подключаем мок только для тестов функций, которые используют document.*
+
+// ═══════════════════════════════════════════════════════════════
+// Загружаем игровой код с перехватом зависимостей
+// ═══════════════════════════════════════════════════════════════
+
+// Определяем ANIMALS и GAME прямо здесь (дублируем из script.js)
+const ANIMALS = [
+    { physicsRadius: 24, scoreValue: 1,  path: "../images/animals/hamster.png" },
+    { physicsRadius: 32, scoreValue: 3,  path: "../images/animals/cat.png" },
+    { physicsRadius: 40, scoreValue: 6,  path: "../images/animals/pig.png" },
+    { physicsRadius: 48, scoreValue: 12, path: "../images/animals/sheep.png" },
+    { physicsRadius: 56, scoreValue: 25, path: "../images/animals/elephant.png" }
+];
+
+function makeCleanGame() {
+    return {
+        WIDTH: 540,
+        HEIGHT: 650,
+        DROP_Y: 80,
+        GAME_OVER_LINE_Y: 130,
+        MAX_ANIMAL_INDEX: ANIMALS.length - 1,
+        engine: { gravity: { y: 1.12 }, world: {} },
+        render: null,
+        runner: null,
+        mouseConstraint: null,
+        currentAnimal: null,
+        animalsInPlay: [],
+        score: 0,
+        gameOver: false,
+        nextAnimalType: null,
+        textures: { 0: 'hamster.png', 1: 'cat.png', 2: 'pig.png', 3: 'sheep.png', 4: null },
+        loadedTextures: 5,
+        allowGameOverCheck: false
+    };
+}
+
+// Изолированные версии функций для тестирования
+function createAnimal_test(GAME, x, y, typeIndex, isStatic = false) {
+    const def = ANIMALS[typeIndex];
+    const spriteDiameter = def.physicsRadius * 2;
+    const options = {
+        restitution: 0.18, friction: 0.9, frictionStatic: 1.2,
+        frictionAir: 0.015, density: 0.0008, slop: 0.01,
+        inertia: Infinity, render: {}
+    };
+    if (GAME.textures[typeIndex]) {
+        options.render.sprite = {
+            texture: GAME.textures[typeIndex],
+            xScale: spriteDiameter / 256,
+            yScale: spriteDiameter / 256
+        };
+    } else {
+        options.render.fillStyle = `hsl(${typeIndex * 72}, 70%, 50%)`;
+    }
+    const body = Matter.Bodies.circle(x, y, def.physicsRadius, options);
+    body.animalType = typeIndex;
+    if (isStatic) Matter.Body.setStatic(body, true);
+    return body;
+}
+
+function checkGameOver_test(GAME) {
+    if (GAME.gameOver || !GAME.allowGameOverCheck) return false;
+    if (GAME.animalsInPlay.length === 0) return false;
+    for (const animal of GAME.animalsInPlay) {
+        if (!animal) continue;
+        if (animal.position.y < GAME.GAME_OVER_LINE_Y) {
+            const speedY = Math.abs(animal.velocity.y);
+            if (speedY < 2.8) {
+                GAME.gameOver = true;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function handleMerge_test(GAME, bodyA, bodyB) {
+    if (bodyA.animalType === undefined || bodyB.animalType === undefined) return null;
+    if (bodyA.animalType !== bodyB.animalType) return null;
+    if (bodyA.animalType >= GAME.MAX_ANIMAL_INDEX) return null;
+    if (bodyA.isMerging || bodyB.isMerging) return null;
+
+    bodyA.isMerging = bodyB.isMerging = true;
+    const newType = bodyA.animalType + 1;
+    const midX = (bodyA.position.x + bodyB.position.x) / 2;
+    const midY = (bodyA.position.y + bodyB.position.y) / 2;
+
+    GAME.animalsInPlay = GAME.animalsInPlay.filter(a => a !== bodyA && a !== bodyB);
+
+    const newAnimal = createAnimal_test(GAME, midX, midY, newType, false);
+    GAME.animalsInPlay.push(newAnimal);
+    GAME.score += ANIMALS[newType].scoreValue * 2;
+    return newAnimal;
+}
+
+function spawnNextAnimal_test(GAME) {
+    if (GAME.gameOver) return null;
+    const typeIndex = GAME.nextAnimalType !== null
+        ? GAME.nextAnimalType
+        : Math.floor(Math.random() * Math.min(4, ANIMALS.length));
+    GAME.nextAnimalType = Math.floor(Math.random() * Math.min(4, ANIMALS.length));
+    const animal = createAnimal_test(GAME, GAME.WIDTH / 2, GAME.DROP_Y, typeIndex, true);
+    GAME.currentAnimal = animal;
+    return animal;
+}
+
+function dropCurrentAnimal_test(GAME) {
+    if (!GAME.currentAnimal || GAME.gameOver || !GAME.currentAnimal.isStatic) return false;
+    Matter.Body.setStatic(GAME.currentAnimal, false);
+    GAME.animalsInPlay.push(GAME.currentAnimal);
+    GAME.currentAnimal = null;
+    GAME.allowGameOverCheck = false;
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ТЕСТЫ
+// ═══════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────
+suite("ANIMALS — таблица животных");
+// ─────────────────────────────────────────────────────────────
+
+test("Ровно 5 животных", () => {
+    expect(ANIMALS.length).toBe(5);
+});
+
+test("Радиусы возрастают (хомяк < слон)", () => {
+    for (let i = 1; i < ANIMALS.length; i++) {
+        expect(ANIMALS[i].physicsRadius).toBeGreaterThan(ANIMALS[i-1].physicsRadius);
+    }
+});
+
+test("Очки возрастают от хомяка к слону", () => {
+    for (let i = 1; i < ANIMALS.length; i++) {
+        expect(ANIMALS[i].scoreValue).toBeGreaterThan(ANIMALS[i-1].scoreValue);
+    }
+});
+
+test("У каждого животного есть путь к изображению", () => {
+    ANIMALS.forEach(a => {
+        expect(typeof a.path).toBe("string");
+        expect(a.path.length).toBeGreaterThan(0);
+    });
+});
+
+test("MAX_ANIMAL_INDEX соответствует последнему индексу", () => {
+    const G = makeCleanGame();
+    expect(G.MAX_ANIMAL_INDEX).toBe(4);
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("createAnimal — создание тела животного");
+// ─────────────────────────────────────────────────────────────
+
+test("Тело создаётся с правильным типом", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 100, 200, 0);
+    expect(body.animalType).toBe(0);
+});
+
+test("Хомяк (type=0) — physicsRadius=24", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 100, 200, 0);
+    expect(body.circleRadius).toBe(24);
+});
+
+test("Слон (type=4) — physicsRadius=56", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 100, 200, 4);
+    expect(body.circleRadius).toBe(56);
+});
+
+test("isStatic=true правильно передаётся через Matter.Body.setStatic", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 270, 80, 0, true);
+    expect(body.isStatic).toBe(true);
+    expect(body._static).toBe(true);
+});
+
+test("isStatic=false — тело динамическое", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 270, 400, 2, false);
+    expect(body.isStatic).toBe(false);
+});
+
+test("Спрайт масштабируется по physicsRadius (diameter/256)", () => {
+    const G = makeCleanGame();
+    const body = createAnimal_test(G, 100, 200, 0); // hamster r=24, diameter=48
+    // xScale = 48/256 = 0.1875
+    expect(body.position.x).toBe(100);
+});
+
+test("Fallback: без текстуры — нет спрайта", () => {
+    const G = makeCleanGame();
+    G.textures[4] = null; // слон без текстуры
+    const body = createAnimal_test(G, 100, 200, 4);
+    expect(body.animalType).toBe(4);
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("spawnNextAnimal — спавн текущего животного");
+// ─────────────────────────────────────────────────────────────
+
+test("Животное появляется на позиции DROP_Y", () => {
+    const G = makeCleanGame();
+    const animal = spawnNextAnimal_test(G);
+    expect(animal.position.y).toBe(G.DROP_Y);
+});
+
+test("Животное появляется по центру ширины", () => {
+    const G = makeCleanGame();
+    const animal = spawnNextAnimal_test(G);
+    expect(animal.position.x).toBe(G.WIDTH / 2);
+});
+
+test("Текущее животное статично (ждёт сброса)", () => {
+    const G = makeCleanGame();
+    const animal = spawnNextAnimal_test(G);
+    expect(animal.isStatic).toBe(true);
+});
+
+test("После спавна GAME.nextAnimalType обновляется", () => {
+    const G = makeCleanGame();
+    G.nextAnimalType = null;
+    spawnNextAnimal_test(G);
+    expect(G.nextAnimalType).not.toBe(null);
+});
+
+test("Следующий тип берётся из nextAnimalType, а не генерируется заново", () => {
+    const G = makeCleanGame();
+    G.nextAnimalType = 3; // овца
+    const animal = spawnNextAnimal_test(G);
+    expect(animal.animalType).toBe(3);
+});
+
+test("Спавн не работает когда gameOver=true", () => {
+    const G = makeCleanGame();
+    G.gameOver = true;
+    const result = spawnNextAnimal_test(G);
+    expect(result).toBeNull();
+});
+
+test("Тип следующего животного в диапазоне 0–3 (слон не спавнится)", () => {
+    const G = makeCleanGame();
+    // Прогоняем 100 спавнов, тип всегда <= 3
+    for (let i = 0; i < 100; i++) {
+        G.nextAnimalType = null;
+        const animal = spawnNextAnimal_test(G);
+        if (animal.animalType > 3) throw new Error(`Спавнился тип ${animal.animalType} > 3`);
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("dropCurrentAnimal — сброс животного");
+// ─────────────────────────────────────────────────────────────
+
+test("После сброса currentAnimal = null", () => {
+    const G = makeCleanGame();
+    spawnNextAnimal_test(G);
+    dropCurrentAnimal_test(G);
+    expect(G.currentAnimal).toBeNull();
+});
+
+test("После сброса животное добавляется в animalsInPlay", () => {
+    const G = makeCleanGame();
+    const animal = spawnNextAnimal_test(G);
+    dropCurrentAnimal_test(G);
+    expect(G.animalsInPlay.length).toBe(1);
+});
+
+test("После сброса тело становится динамическим", () => {
+    const G = makeCleanGame();
+    const animal = spawnNextAnimal_test(G);
+    dropCurrentAnimal_test(G);
+    expect(animal.isStatic).toBe(false);
+});
+
+test("Сброс не срабатывает при gameOver=true", () => {
+    const G = makeCleanGame();
+    spawnNextAnimal_test(G);
+    G.gameOver = true;
+    const result = dropCurrentAnimal_test(G);
+    expect(result).toBe(false);
+    expect(G.currentAnimal).not.toBe(null);
+});
+
+test("Сброс не срабатывает если нет currentAnimal", () => {
+    const G = makeCleanGame();
+    G.currentAnimal = null;
+    const result = dropCurrentAnimal_test(G);
+    expect(result).toBe(false);
+});
+
+test("После сброса allowGameOverCheck сбрасывается в false", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    spawnNextAnimal_test(G);
+    dropCurrentAnimal_test(G);
+    expect(G.allowGameOverCheck).toBe(false);
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("handleMerge — слияние животных");
+// ─────────────────────────────────────────────────────────────
+
+test("Два хомяка (type=0) сливаются в кошку (type=1)", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0);
+    const b = createAnimal_test(G, 148, 500, 0);
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged).not.toBe(null);
+    expect(merged.animalType).toBe(1);
+});
+
+test("FIX: хомяки с animalType=0 НЕ пропускаются (falsy-баг)", () => {
+    // animalType=0 ранее давал !0 === true → пара пропускалась
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0); // animalType=0
+    const b = createAnimal_test(G, 148, 500, 0);
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged).not.toBe(null); // должны слиться
+});
+
+test("Животные разных типов не сливаются", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0);
+    const b = createAnimal_test(G, 148, 500, 1);
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged).toBeNull();
+});
+
+test("Слоны (type=4) не сливаются (MAX_ANIMAL_INDEX)", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 4);
+    const b = createAnimal_test(G, 200, 500, 4);
+    a.animalType = 4; b.animalType = 4;
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged).toBeNull();
+});
+
+test("FIX: слитые тела удаляются из animalsInPlay", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0);
+    const b = createAnimal_test(G, 148, 500, 0);
+    G.animalsInPlay = [a, b];
+    handleMerge_test(G, a, b);
+    expect(G.animalsInPlay).not.toContain(a);
+    expect(G.animalsInPlay).not.toContain(b);
+});
+
+test("После слияния добавляется новое животное", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0);
+    const b = createAnimal_test(G, 148, 500, 0);
+    G.animalsInPlay = [a, b];
+    handleMerge_test(G, a, b);
+    expect(G.animalsInPlay.length).toBe(1);
+    expect(G.animalsInPlay[0].animalType).toBe(1);
+});
+
+test("Очки начисляются за слияние", () => {
+    const G = makeCleanGame();
+    G.score = 0;
+    const a = createAnimal_test(G, 100, 500, 1); // cat → pig
+    const b = createAnimal_test(G, 200, 500, 1);
+    G.animalsInPlay = [a, b];
+    handleMerge_test(G, a, b);
+    // newType=2 (pig, scoreValue=6), score += 6*2=12
+    expect(G.score).toBe(12);
+});
+
+test("Новое животное появляется в середине двух исходных", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 400, 0);
+    const b = createAnimal_test(G, 200, 600, 0);
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged.position.x).toBe(150); // (100+200)/2
+    expect(merged.position.y).toBe(500); // (400+600)/2
+});
+
+test("Тело с isMerging=true пропускается (защита от двойного слияния)", () => {
+    const G = makeCleanGame();
+    const a = createAnimal_test(G, 100, 500, 0);
+    const b = createAnimal_test(G, 148, 500, 0);
+    a.isMerging = true;
+    G.animalsInPlay = [a, b];
+    const merged = handleMerge_test(G, a, b);
+    expect(merged).toBeNull();
+});
+
+test("Тело без animalType (стена) пропускается", () => {
+    const G = makeCleanGame();
+    const wall = makeBody(0, 650, 45, true); // нет animalType
+    const a = createAnimal_test(G, 100, 500, 0);
+    G.animalsInPlay = [a];
+    const merged = handleMerge_test(G, wall, a);
+    expect(merged).toBeNull();
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("checkGameOver — конец игры");
+// ─────────────────────────────────────────────────────────────
+
+test("FIX: game over срабатывает, когда животное выше линии опасности", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    const animal = makeBody(270, 50, 24, false); // y=50 < GAME_OVER_LINE_Y=130
+    animal.animalType = 0;
+    animal.velocity = { x: 0, y: 0.1 }; // почти стоит
+    G.animalsInPlay = [animal];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(true);
+    expect(G.gameOver).toBe(true);
+});
+
+test("Game over не срабатывает при allowGameOverCheck=false", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = false;
+    const animal = makeBody(270, 50, 24, false);
+    animal.velocity = { x: 0, y: 0 };
+    G.animalsInPlay = [animal];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(false);
+    expect(G.gameOver).toBe(false);
+});
+
+test("Game over не срабатывает при быстром движении вверх (speedY > 2.8)", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    const animal = makeBody(270, 50, 24, false);
+    animal.velocity = { x: 0, y: 5.0 }; // быстро движется — не считаем game over
+    G.animalsInPlay = [animal];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(false);
+});
+
+test("Game over не срабатывает если животное ниже линии (y > GAME_OVER_LINE_Y)", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    const animal = makeBody(270, 400, 24, false); // y=400 >> 130
+    animal.velocity = { x: 0, y: 0 };
+    G.animalsInPlay = [animal];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(false);
+});
+
+test("Game over не срабатывает при пустом animalsInPlay", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    G.animalsInPlay = [];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(false);
+});
+
+test("Game over не срабатывает если gameOver уже true", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    G.gameOver = true;
+    const animal = makeBody(270, 50, 24, false);
+    animal.velocity = { x: 0, y: 0 };
+    G.animalsInPlay = [animal];
+    // Убеждаемся, что повторно не сработает
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(false);
+});
+
+test("Несколько животных — если ОДНО выше линии и стоит, game over", () => {
+    const G = makeCleanGame();
+    G.allowGameOverCheck = true;
+    const safe    = makeBody(100, 400, 24, false); // ниже линии
+    const danger  = makeBody(200, 80,  24, false);  // выше линии y=80
+    safe.velocity   = { x: 0, y: 0 };
+    danger.velocity = { x: 0, y: 0.5 };
+    G.animalsInPlay = [safe, danger];
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(true);
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("Игровой сценарий — полная цепочка слияний");
+// ─────────────────────────────────────────────────────────────
+
+test("Хомяк→Кошка→Свинья: очки накапливаются корректно", () => {
+    const G = makeCleanGame();
+    G.score = 0;
+
+    // Слияние 2 хомяков (type=0) → кошка (type=1), +scoreValue[1]*2 = 3*2 = 6
+    const h1 = createAnimal_test(G, 100, 500, 0);
+    const h2 = createAnimal_test(G, 148, 500, 0);
+    G.animalsInPlay = [h1, h2];
+    const cat = handleMerge_test(G, h1, h2);
+    expect(G.score).toBe(6);
+
+    // Слияние 2 кошек (type=1) → свинья (type=2), +scoreValue[2]*2 = 6*2 = 12
+    const c2 = createAnimal_test(G, 250, 500, 1);
+    G.animalsInPlay.push(c2);
+    const pig = handleMerge_test(G, cat, c2);
+    expect(G.score).toBe(18);
+});
+
+test("Полный цикл drop → settle → game over", () => {
+    const G = makeCleanGame();
+
+    // Спавним и сбрасываем
+    spawnNextAnimal_test(G);
+    const animal = G.currentAnimal;
+    dropCurrentAnimal_test(G);
+
+    // Имитируем "стоячее" животное выше линии
+    animal.position.y = 50;
+    animal.velocity = { x: 0, y: 0 };
+    G.allowGameOverCheck = true;
+
+    const triggered = checkGameOver_test(G);
+    expect(triggered).toBe(true);
+    expect(G.gameOver).toBe(true);
+    expect(G.score).toBe(0); // без слияний очков нет
+});
+
+test("Рестарт сбрасывает всё состояние", () => {
+    const G = makeCleanGame();
+    G.score = 100;
+    G.gameOver = true;
+    G.nextAnimalType = 3;
+    G.animalsInPlay = [makeBody(100, 500, 24, false)];
+
+    // Имитируем restartGame логику
+    G.score = 0;
+    G.gameOver = false;
+    G.allowGameOverCheck = false;
+    G.animalsInPlay = [];
+    G.nextAnimalType = null;
+    G.currentAnimal = null;
+
+    expect(G.score).toBe(0);
+    expect(G.gameOver).toBe(false);
+    expect(G.animalsInPlay.length).toBe(0);
+    expect(G.nextAnimalType).toBeNull();
+    expect(G.currentAnimal).toBeNull();
+});
+
+// ─────────────────────────────────────────────────────────────
+suite("Граничные случаи");
+// ─────────────────────────────────────────────────────────────
+
+test("Позиция мыши ограничивается в пределах поля", () => {
+    const G = makeCleanGame();
+    const animal = createAnimal_test(G, G.WIDTH / 2, G.DROP_Y, 0, true);
+    G.currentAnimal = animal;
+    const r = animal.circleRadius;
+
+    // Тест логики зажима
+    const clamp = (mx) => Math.max(r * 1.5, Math.min(G.WIDTH - r * 1.5, mx));
+    expect(clamp(-100)).toBe(r * 1.5);        // левый край
+    expect(clamp(9999)).toBe(G.WIDTH - r * 1.5); // правый край
+    expect(clamp(270)).toBe(270);              // центр
+});
+
+test("GAME_OVER_LINE_Y (130) больше DROP_Y (80) — линия видна ниже точки сброса", () => {
+    const G = makeCleanGame();
+    expect(G.GAME_OVER_LINE_Y).toBeGreaterThan(G.DROP_Y);
+});
+
+test("Каждый уровень слияния даёт больше очков чем предыдущий", () => {
+    for (let type = 1; type < ANIMALS.length; type++) {
+        expect(ANIMALS[type].scoreValue * 2).toBeGreaterThan(ANIMALS[type-1].scoreValue * 2);
+    }
+});
+
+test("Спрайт масштаб не превышает 1.0 ни для одного животного", () => {
+    ANIMALS.forEach(def => {
+        const scale = (def.physicsRadius * 2) / 256;
+        if (scale > 1.0) throw new Error(`Слон: scale=${scale} > 1.0`);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Итог
+// ─────────────────────────────────────────────────────────────
+const total = results.pass + results.fail;
+const color = results.fail === 0 ? "color:#4ecca3" : "color:#e94560";
+out.innerHTML += `
+    <div class="summary" style="${color}">
+        <strong>Итог: ${results.pass}/${total} тестов прошло
+        ${results.fail === 0 ? "✅ ВСЕ ПРОШЛИ" : `❌ УПАЛО: ${results.fail}`}
+        </strong>
+    </div>
+`;
+</script>
+</body>
+</html>

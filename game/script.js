@@ -1,344 +1,547 @@
+// ═══ Таблица животных ════════════════════════════════════════════════════════
+const LEVEL_SCALE = (() => {
+    const p = new URLSearchParams(window.location.search).get("level");
+    if (p === "hard")   return 1.6;
+    if (p === "medium") return 1.3;
+    return 1; // easy (default)
+})();
+
+// Визуальный множитель спрайта: 1.1 покрывает прозрачные поля картинок
+// без видимого наложения животных друг на друга
+const SPRITE_VISUAL = 1.3;
+
 const ANIMALS = [
-  { visualRadius: 6, physicsRadius: 24, scoreValue: 1,   path: "../images/animals/hamster.png" },
-  { visualRadius: 8, physicsRadius: 32, scoreValue: 3,   path: "../images/animals/cat.png" },
-  { visualRadius: 10, physicsRadius: 40, scoreValue: 6,   path: "../images/animals/pig.png" },
-  { visualRadius: 12, physicsRadius: 48, scoreValue: 12,  path: "../images/animals/sheep.png" },
-  { visualRadius: 14, physicsRadius: 56, scoreValue: 25,  path: "../images/animals/elephant.png" }
+  { physicsRadius: 24 * LEVEL_SCALE, scoreValue:  10, path: "../images/animals/hamster.png"  },
+  { physicsRadius: 32 * LEVEL_SCALE, scoreValue:  20, path: "../images/animals/cat.png"      },
+  { physicsRadius: 40 * LEVEL_SCALE, scoreValue:  40, path: "../images/animals/pig.png"      },
+  { physicsRadius: 48 * LEVEL_SCALE, scoreValue:  80, path: "../images/animals/sheep.png"    },
+  { physicsRadius: 56 * LEVEL_SCALE, scoreValue: 150, path: "../images/animals/elephant.png" }
 ];
 
+const ELEPHANT_IDX   = ANIMALS.length - 1; // 4 — финальное животное
+
+let _gameOverTimer = null; // один таймер разрешения проверки (clearTimeout при каждом броске)
+const ELEPHANT_BONUS = 200;                 // очки за слияние двух слонов
+
+// ═══ Состояние игры ══════════════════════════════════════════════════════════
 const GAME = {
-    WIDTH: 540,
+    WIDTH:  540,
     HEIGHT: 650,
-    DROP_Y: 92,                    // чуть ниже, чтобы было комфортнее
-    GAME_OVER_LINE_Y: 100,         // ← БЫЛО 145, СТАЛО 205 (главный фикс)
-    MAX_ANIMAL_INDEX: ANIMALS.length - 1,
-    
+    // DROP_Y: под шапкой (~60px) + радиус слона — зверь целиком виден
+    // GAME_OVER_LINE_Y: ещё два диаметра слона ниже — даёт визуально чёткую зону
+    DROP_Y:           Math.round(60 + ANIMALS[ELEPHANT_IDX].physicsRadius),
+    GAME_OVER_LINE_Y: Math.round(60 + ANIMALS[ELEPHANT_IDX].physicsRadius * 3),
+
     engine: null,
     render: null,
     runner: null,
-    mouseConstraint: null,
-    
-    currentAnimal: null,
-    animalsInPlay: [],
-    score: 0,
-    gameOver: false,
-    
-    textures: {},
+    _mouse: null,
+
+    currentAnimal:  null,
+    animalsInPlay:  [],
+    popEffects:     [],  // анимации взрыва слонов
+    mergeFlashes:   [],  // короткие вспышки обычных слияний
+    score:          0,
+    gameOver:       false,
+    nextAnimalType: null,
+
+    textures:       {},
     loadedTextures: 0,
-    allowGameOverCheck: false     // ← НОВЫЙ ФЛАГ
+    allowGameOverCheck: false
 };
 
-function preloadTextures(callback) {
-  ANIMALS.forEach((animal, index) => {
-    const img = new Image();
-    img.onload = () => {
-      GAME.textures[index] = img.src;
-      GAME.loadedTextures++;
-      if (GAME.loadedTextures === ANIMALS.length) callback();
-    };
-    img.onerror = () => {
-      console.warn(`Ошибка загрузки изображения: ${animal.path}. Использую fallback.`);
-      GAME.textures[index] = null; // fallback в createAnimal
-      GAME.loadedTextures++;
-      if (GAME.loadedTextures === ANIMALS.length) callback();
-    };
-    img.src = animal.path;
-  });
+// ═══ Вспомогательные функции UI ═══════════════════════════════════════════════
+function ui(id) { return document.getElementById(id); }
+
+function showGameOver() {
+    GAME.gameOver = true;
+
+    const screen = ui("gameover-screen");
+    const val    = ui("gameover-score-value");
+    if (val)    val.textContent  = GAME.score;
+    if (screen) screen.classList.add("show");
 }
 
+function hideGameOver() {
+    const screen = ui("gameover-screen");
+    if (screen) screen.classList.remove("show");
+}
+
+// ═══ Предзагрузка текстур ════════════════════════════════════════════════════
+function preloadTextures(callback) {
+    let loaded = 0;
+    ANIMALS.forEach((animal, index) => {
+        const img = new Image();
+        img.onload = () => {
+            GAME.textures[index] = img.src;
+            if (++loaded === ANIMALS.length) callback();
+        };
+        img.onerror = () => {
+            console.warn(`Нет текстуры: ${animal.path}`);
+            GAME.textures[index] = null;
+            if (++loaded === ANIMALS.length) callback();
+        };
+        img.src = animal.path;
+    });
+}
+
+// ═══ Физические границы ══════════════════════════════════════════════════════
 function createWallsAndFloor() {
-    const staticOptions = {
+    const opts = {
         isStatic: true,
-        friction: 1.0,          // максимум
-        frictionStatic: 1.5,    // сильно помогает стопке не разъезжаться
-        restitution: 0.02,      // почти никакого отскока от границ
+        friction: 0.5, frictionStatic: 1.0,
+        restitution: 0.0,
         render: { visible: false }
     };
 
-    const floor = Matter.Bodies.rectangle(
-        GAME.WIDTH / 2, 
-        GAME.HEIGHT + 35, 
-        GAME.WIDTH * 1.45, 
-        90, 
-        staticOptions
-    );
+    // Физические стенки — прямые вертикальные (как в оригинальной Suika).
+    // Визуальный конус стакана — только декорация в setupOverlayRendering.
+    const GlassTopY = 58, GlassBotY = GAME.HEIGHT - 2;
+    const WallX = 13;   // отступ прямой стенки (совпадает с верхним краем визуального конуса)
+    const FloorH = 18;
+    const thick  = 80;
 
-    const leftWall = Matter.Bodies.rectangle(-45, GAME.HEIGHT / 2, 90, GAME.HEIGHT * 1.5, staticOptions);
-    const rightWall = Matter.Bodies.rectangle(GAME.WIDTH + 45, GAME.HEIGHT / 2, 90, GAME.HEIGHT * 1.5, staticOptions);
-
-    Matter.Composite.add(GAME.engine.world, [floor, leftWall, rightWall]);
+    Matter.Composite.add(GAME.engine.world, [
+        // Левая прямая стенка
+        Matter.Bodies.rectangle(WallX - thick / 2, GAME.HEIGHT / 2, thick, GAME.HEIGHT, opts),
+        // Правая прямая стенка
+        Matter.Bodies.rectangle(GAME.WIDTH - WallX + thick / 2, GAME.HEIGHT / 2, thick, GAME.HEIGHT, opts),
+        // Пол
+        Matter.Bodies.rectangle(GAME.WIDTH / 2, GlassBotY - FloorH / 2,
+            GAME.WIDTH - WallX * 2, FloorH, opts),
+        // Потолок — не даёт вылетать при взрыве слонов
+        Matter.Bodies.rectangle(GAME.WIDTH / 2, GlassTopY - 25,
+            GAME.WIDTH * 2, 50, opts),
+    ]);
 }
 
-function createAnimal(x, y, typeIndex, isStatic = false) {
-    const def = ANIMALS[typeIndex];
+// ═══ Создание тела животного ══════════════════════════════════════════════════
+function createAnimal(x, y, typeIndex, isStatic) {
+    const def   = ANIMALS[typeIndex];
+    // Спрайт рисуется на 30% крупнее физического тела — перекрывает прозрачные
+    // отступы вокруг рисунка в картинках 1250×1250, убирая видимые зазоры
+    const scale = (def.physicsRadius * 2 * SPRITE_VISUAL) / 1250;
 
     const options = {
-        restitution: 0.18,          // ↓ сильно уменьшаем отскок
-        friction: 0.9,              // ↑ почти максимум
-        frictionStatic: 1.2,        // добавляем — важно для покоя
-        frictionAir: 0.015,         // чуть меньше, чтобы не тормозило слишком сильно в воздухе
-        density: 0.0008,            // ↓ уменьшаем плотность → легче "ложатся"
-        slop: 0.01,                 // меньше "проваливания"
-        inertia: Infinity,          // оставляем — хорошо против вращения
-        render: {}
+        restitution: 0.18, friction: 0.9, frictionStatic: 1.2,
+        frictionAir: 0.015, density: 0.0008, slop: 0.005,
+        inertia: Infinity,
+        render: GAME.textures[typeIndex]
+            ? { sprite: { texture: GAME.textures[typeIndex], xScale: scale, yScale: scale } }
+            : { fillStyle: `hsl(${typeIndex * 72}, 70%, 50%)` }
     };
 
-    if (GAME.textures[typeIndex]) {
-        const visualDiameter = def.visualRadius * 2;
-        options.render.sprite = {
-            texture: GAME.textures[typeIndex],
-            xScale: visualDiameter / 256,
-            yScale: visualDiameter / 256
-        };
-    } else {
-        options.render.fillStyle = `hsl(${typeIndex * 72}, 70%, 50%)`;
-    }
-
-    // ← Вот где физический радиус больше визуального
     const body = Matter.Bodies.circle(x, y, def.physicsRadius, options);
-
     body.animalType = typeIndex;
-    body.isStatic = isStatic;
+    body.justMerged = false;
 
+    if (isStatic) Matter.Body.setStatic(body, true);
     return body;
 }
 
+// ═══ Спавн животного ═════════════════════════════════════════════════════════
 function spawnNextAnimal() {
-  if (GAME.gameOver) return;
-  
-  const typeIndex = Math.floor(Math.random() * Math.min(4, ANIMALS.length));
-  
-  GAME.currentAnimal = createAnimal(GAME.WIDTH / 2, GAME.DROP_Y, typeIndex, true);
-  Matter.Composite.add(GAME.engine.world, GAME.currentAnimal);
-  
-  updateNextPreview();
+    if (GAME.gameOver) return;
+
+    const typeIndex = GAME.nextAnimalType !== null
+        ? GAME.nextAnimalType
+        : Math.floor(Math.random() * Math.min(4, ANIMALS.length));
+
+    // Готовим следующий тип заранее для корректного превью
+    GAME.nextAnimalType = Math.floor(Math.random() * Math.min(4, ANIMALS.length));
+
+    GAME.currentAnimal = createAnimal(GAME.WIDTH / 2, GAME.DROP_Y, typeIndex, true);
+    Matter.Composite.add(GAME.engine.world, GAME.currentAnimal);
+
+    const el = ui("next-animal");
+    if (el) el.src = GAME.textures[GAME.nextAnimalType] || '';
 }
 
-function updateNextPreview() {
-  const previewIndex = Math.floor(Math.random() * Math.min(4, ANIMALS.length));
-  document.getElementById("next-animal").src = GAME.textures[previewIndex] || '';
-}
-
+// ═══ Сброс животного ═════════════════════════════════════════════════════════
 function dropCurrentAnimal() {
     if (!GAME.currentAnimal || GAME.gameOver || !GAME.currentAnimal.isStatic) return;
 
-    GAME.currentAnimal.isStatic = false;
+    Matter.Body.setStatic(GAME.currentAnimal, false);
     GAME.animalsInPlay.push(GAME.currentAnimal);
     GAME.currentAnimal = null;
 
-    // Самое важное: отключаем проверку Game Over на время падения этого животного
     GAME.allowGameOverCheck = false;
-
-    // Включаем обратно через 800–1200 мс (в зависимости от гравитации и высоты)
-    setTimeout(() => {
-        GAME.allowGameOverCheck = true;
-    }, 1000);   // 1000 мс — хороший баланс для твоей гравитации 1.12
-
-    setTimeout(spawnNextAnimal, 400);   // можно чуть быстрее, 300–500 мс
+    clearTimeout(_gameOverTimer);
+    _gameOverTimer = setTimeout(() => { GAME.allowGameOverCheck = true; }, 900);
+    setTimeout(spawnNextAnimal, 380);
 }
 
+// ═══ Логика слияний ══════════════════════════════════════════════════════════
 function handleCollisions() {
-  Matter.Events.on(GAME.engine, "collisionStart", (event) => {
-    // если игра уже закончена — ничего не делаем
-    if (GAME.gameOver) return;
+    Matter.Events.on(GAME.engine, "collisionStart", event => {
+        if (GAME.gameOver) return;
 
-    for (const pair of event.pairs) {
-      const { bodyA, bodyB } = pair;
+        for (const { bodyA, bodyB } of event.pairs) {
+            if (bodyA.animalType === undefined || bodyB.animalType === undefined) continue;
+            if (bodyA.animalType !== bodyB.animalType) continue;
+            if (bodyA.isMerging  || bodyB.isMerging)  continue;
 
-      // пропускаем, если хотя бы одно тело — не животное
-      if (!bodyA?.animalType || !bodyB?.animalType) continue;
+            bodyA.isMerging = bodyB.isMerging = true;
 
-      // сливаем только одинаковые типы
-      if (bodyA.animalType !== bodyB.animalType) continue;
+            const typeIndex = bodyA.animalType;
+            const midX = (bodyA.position.x + bodyB.position.x) / 2;
+            const midY = (bodyA.position.y + bodyB.position.y) / 2;
 
-      // не сливаем максимальный уровень
-      if (bodyA.animalType >= GAME.MAX_ANIMAL_INDEX) continue;
+            // Убираем оба тела
+            Matter.Composite.remove(GAME.engine.world, bodyA);
+            Matter.Composite.remove(GAME.engine.world, bodyB);
+            GAME.animalsInPlay = GAME.animalsInPlay.filter(a => a !== bodyA && a !== bodyB);
 
-      // защита от множественного слияния одного и того же тела
-      if (bodyA.isMerging || bodyB.isMerging) continue;
+            // ── ДВА СЛОНА → исчезают + бонусные очки ─────────────────────
+            if (typeIndex === ELEPHANT_IDX) {
+                GAME.score += ELEPHANT_BONUS;
+                ui("score").textContent = GAME.score;
 
-      // помечаем тела как находящиеся в процессе слияния
-      bodyA.isMerging = bodyB.isMerging = true;
+                // Физическая ударная волна — прямое задание скорости
+                // Ударная волна: прямое задание скорости — всё летит по полю
+                for (const body of GAME.animalsInPlay) {
+                    const dx   = body.position.x - midX;
+                    const dy   = body.position.y - midY;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    // затухание линейное, минимум 0.3 — даже дальние звери летят
+                    const falloff = Math.max(0.3, 1 - dist / GAME.WIDTH);
+                    Matter.Body.setVelocity(body, {
+                        x: (dx / dist) * 50 * falloff,
+                        y: (dy / dist) * 50 * falloff - 20 * falloff
+                    });
+                }
 
-      const newType = bodyA.animalType + 1;
+                // Пока звери летают после взрыва — не считать game-over
+                GAME.allowGameOverCheck = false;
+                clearTimeout(_gameOverTimer);
+                _gameOverTimer = setTimeout(() => { GAME.allowGameOverCheck = true; }, 2500);
 
-      // берём среднюю точку между двумя животными
-      const midX = (bodyA.position.x + bodyB.position.x) / 2;
-      const midY = (bodyA.position.y + bodyB.position.y) / 2;
+                // Искры — 12 лучей в случайных направлениях
+                const sparks = Array.from({ length: 12 }, (_, i) => ({
+                    angle: (i / 12) * Math.PI * 2 + (Math.random() - 0.5) * 0.5,
+                    len:   0.5 + Math.random() * 0.7
+                }));
+                GAME.popEffects.push({
+                    x: midX, y: midY,
+                    r: ANIMALS[ELEPHANT_IDX].physicsRadius,
+                    born: Date.now(), sparks
+                });
+                continue;
+            }
 
-      // удаляем старые тела
-      Matter.Composite.remove(GAME.engine.world, [bodyA, bodyB]);
+            // ── ОБЫЧНОЕ СЛИЯНИЕ → следующий уровень + очки ───────────────
+            GAME.score += ANIMALS[typeIndex + 1].scoreValue;
+            ui("score").textContent = GAME.score;
 
-      // создаём новое животное
-      const newAnimal = createAnimal(midX, midY, newType, false);
+            // Короткая вспышка при слиянии
+            GAME.mergeFlashes.push({ x: midX, y: midY, r: ANIMALS[typeIndex + 1].physicsRadius, born: Date.now() });
 
-      // сразу убираем остаточную скорость и вращение — это сильно уменьшает хаос после слияния
-      Matter.Body.setVelocity(newAnimal, { x: 0, y: 0 });
-      Matter.Body.setAngularVelocity(newAnimal, 0);
+            const newType   = typeIndex + 1;
+            const newAnimal = createAnimal(midX, midY, newType, false);
+            Matter.Body.setVelocity(newAnimal, { x: 0, y: 1 });
+            Matter.Body.setAngularVelocity(newAnimal, 0);
+            Matter.Composite.add(GAME.engine.world, newAnimal);
+            GAME.animalsInPlay.push(newAnimal);
 
-      // можно слегка сдвинуть вниз, чтобы новое животное не "всплывало" (опционально)
-      // Matter.Body.translate(newAnimal, { x: 0, y: 8 });
-
-      // добавляем в мир и в массив активных животных
-      Matter.Composite.add(GAME.engine.world, newAnimal);
-      GAME.animalsInPlay.push(newAnimal);
-
-      // начисляем очки
-      GAME.score += ANIMALS[newType].scoreValue * 2;
-      document.getElementById("score").textContent = GAME.score;
-
-      setTimeout(() => {
-        bodyA.isMerging = false;
-        bodyB.isMerging = false;
-      }, 120);
-    }
-  });
+            // Не проверять game-over для только что созданного тела
+            newAnimal.justMerged = true;
+            setTimeout(() => { newAnimal.justMerged = false; }, 700);
+        }
+    });
 }
 
+// ═══ Проверка конца игры ══════════════════════════════════════════════════════
+// Зверь должен быть выше линии И почти неподвижен 10 кадров подряд (~0.17 с).
+// Это исключает ложные срабатывания при быстром пролёте через зону.
 function checkGameOver() {
     if (GAME.gameOver || !GAME.allowGameOverCheck) return;
-    if (GAME.animalsInPlay.length === 0) return;
 
     for (const animal of GAME.animalsInPlay) {
-        if (!animal) continue;
+        if (!animal || animal.justMerged) {
+            if (animal) animal._dangerFrames = 0;
+            continue;
+        }
 
-        // Игнорируем верхнюю зону (спавн + запас на отскок)
-        if (animal.position.y < GAME.DROP_Y + 120) continue;   // ← важно!
+        // Проверяем верхний край физического тела (не центр) —
+        // это соответствует тому, что видит игрок
+        const topEdge = animal.position.y - animal.circleRadius;
+        const speed   = Math.hypot(animal.velocity.x, animal.velocity.y);
 
-        if (animal.position.y < GAME.GAME_OVER_LINE_Y) {
-            const speedY = Math.abs(animal.velocity.y);
-
-            // Если скорость маленькая → почти остановилось наверху → проигрыш
-            if (speedY < 2.8) {          // было 3.5 → можно опустить до 2.5–3.0
-                GAME.gameOver = true;
-                document.getElementById("restart").style.display = "inline-block";
-
-                setTimeout(() => {
-                    alert(`Игра окончена!\n\nВаш счёт: ${GAME.score}`);
-                }, 300);
+        if (topEdge < GAME.GAME_OVER_LINE_Y && speed < 3) {
+            animal._dangerFrames = (animal._dangerFrames || 0) + 1;
+            if (animal._dangerFrames >= 10) {
+                showGameOver();
                 return;
             }
+        } else {
+            animal._dangerFrames = 0;
         }
     }
 }
 
+// ═══ Физика и рендер ═════════════════════════════════════════════════════════
 function initPhysics() {
-  GAME.engine = Matter.Engine.create();
-  GAME.engine.gravity.y = 1.12;
-  
-  const container = document.getElementById("canvas-container");
-  
-  GAME.render = Matter.Render.create({
-    element: container,
-      engine: GAME.engine,
-      options: {
-          width: GAME.WIDTH,
-          height: GAME.HEIGHT,
-          wireframes: false,
-          background: 'transparent',           // ← главное изменение
-          wireframeBackground: 'transparent',  // на случай переключения в wireframe-режим
-          showAngleIndicator: false,
-          showCollisions: false,           
-          showVelocity: false
-      }
-  });
-  GAME.render.canvas.style.background = 'transparent';
-  GAME.render.canvas.style.backgroundColor = 'transparent';
-  
-  GAME.runner = Matter.Runner.create();
-  Matter.Render.run(GAME.render);
-  Matter.Runner.run(GAME.runner, GAME.engine);
-  
-  createWallsAndFloor();
+    GAME.engine = Matter.Engine.create({
+        positionIterations: 12,  // default 6 — важно для наклонных стенок
+        velocityIterations: 10,  // default 4 — уменьшает "телепорт" при угловых стыках
+        constraintIterations: 4
+    });
+    GAME.engine.gravity.y = 1.12;
+
+    const container = ui("canvas-container");
+
+    GAME.render = Matter.Render.create({
+        element: container,
+        engine:  GAME.engine,
+        options: {
+            width:      GAME.WIDTH,
+            height:     GAME.HEIGHT,
+            wireframes: false,
+            background: '#b8dff5',
+            showAngleIndicator: false,
+            showCollisions:     false,
+            showVelocity:       false
+        }
+    });
+
+    GAME.runner = Matter.Runner.create();
+    Matter.Render.run(GAME.render);
+    Matter.Runner.run(GAME.runner, GAME.engine);
+
+    createWallsAndFloor();
 }
 
+// ═══ Управление (мышь / клик) ═════════════════════════════════════════════════
 function setupControls() {
-  const mouse = Matter.Mouse.create(GAME.render.canvas);
-  GAME.mouseConstraint = Matter.MouseConstraint.create(GAME.engine, { mouse });
-  Matter.Composite.add(GAME.engine.world, GAME.mouseConstraint);
-  GAME.render.mouse = mouse;
-  
-  GAME.render.canvas.addEventListener("click", dropCurrentAnimal);
-  
-  Matter.Events.on(GAME.engine, "beforeUpdate", () => {
-    if (!GAME.currentAnimal || !GAME.currentAnimal.isStatic) return;
-    
-    const mx = Math.max(GAME.currentAnimal.circleRadius * 1.5, 
-                        Math.min(GAME.WIDTH - GAME.currentAnimal.circleRadius * 1.5, 
-                                 mouse.position.x));
-    
-    GAME.currentAnimal.position.x = mx;
-  });
+    GAME._mouse = Matter.Mouse.create(GAME.render.canvas);
+    GAME.render.mouse = GAME._mouse; // автокоррекция масштаба
+
+    GAME.render.canvas.addEventListener("click", dropCurrentAnimal);
+
+    Matter.Events.on(GAME.engine, "beforeUpdate", () => {
+        if (!GAME.currentAnimal || !GAME.currentAnimal.isStatic) return;
+        const r  = GAME.currentAnimal.circleRadius;
+        const mx = Math.max(r * 1.5, Math.min(GAME.WIDTH - r * 1.5, GAME._mouse.position.x));
+        Matter.Body.setPosition(GAME.currentAnimal, { x: mx, y: GAME.DROP_Y });
+    });
 }
 
+// ═══ Наложение поверх канваса ═════════════════════════════════════════════════
+function setupOverlayRendering() {
+    Matter.Events.on(GAME.render, "afterRender", () => {
+        const ctx = GAME.render.canvas.getContext("2d");
+        const W = GAME.WIDTH, H = GAME.HEIGHT;
+        ctx.save();
+
+        ctx.shadowBlur = 0;
+
+        // ── Линия опасности ───────────────────────────────────────────────
+        ctx.setLineDash([11, 7]);
+        ctx.strokeStyle = "rgba(210,40,40,0.9)";
+        ctx.lineWidth   = 2.5;
+        ctx.shadowColor = "#ff2222";
+        ctx.shadowBlur  = 7;
+        ctx.beginPath();
+        ctx.moveTo(7, GAME.GAME_OVER_LINE_Y);
+        ctx.lineTo(W - 7, GAME.GAME_OVER_LINE_Y);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.shadowBlur = 0;
+        ctx.font       = "bold 10px Arial";
+        ctx.fillStyle  = "rgba(210,40,40,0.85)";
+        ctx.textAlign  = "right";
+        ctx.fillText("⚠ ОПАСНО", W - 10, GAME.GAME_OVER_LINE_Y - 4);
+
+        // ── Прицел ────────────────────────────────────────────────────────
+        if (GAME.currentAnimal && !GAME.gameOver) {
+            const cx = GAME.currentAnimal.position.x;
+            ctx.setLineDash([4, 6]);
+            ctx.strokeStyle = "rgba(255,255,255,0.28)";
+            ctx.lineWidth   = 1;
+            ctx.shadowBlur  = 0;
+            ctx.beginPath();
+            ctx.moveTo(cx, GAME.DROP_Y + GAME.currentAnimal.circleRadius + 2);
+            ctx.lineTo(cx, H - 10);
+            ctx.stroke();
+        }
+
+        // ── Вспышки обычных слияний (короткий пульс) ─────────────────────
+        ctx.setLineDash([]);
+        const now = Date.now();
+        const easeOut = t => 1 - (1 - t) ** 3;
+
+        GAME.mergeFlashes = GAME.mergeFlashes.filter(f => {
+            const t = (now - f.born) / 350;
+            if (t >= 1) return false;
+            const alpha = (1 - t) * 0.7;
+            const r     = f.r * (1 + easeOut(t) * 1.2);
+            const grad  = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+            grad.addColorStop(0, `rgba(255,255,220,${alpha})`);
+            grad.addColorStop(1, `rgba(255,255,180,0)`);
+            ctx.fillStyle = grad;
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            return true;
+        });
+
+        // ── Взрыв слонов ──────────────────────────────────────────────────
+        GAME.popEffects = GAME.popEffects.filter(p => {
+            const DURATION = 1300;
+            const t = (now - p.born) / DURATION;
+            if (t >= 1) return false;
+
+            // 1. Белая вспышка (первые 25%)
+            if (t < 0.25) {
+                const ft    = t / 0.25;
+                const alpha = (1 - ft) * 0.85;
+                const r     = p.r * (0.4 + easeOut(ft) * 1.6);
+                const grad  = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+                grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+                grad.addColorStop(0.5, `rgba(255,240,180,${alpha * 0.6})`);
+                grad.addColorStop(1,   `rgba(255,200,50,0)`);
+                ctx.fillStyle = grad;
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 2. Золотое кольцо (основное)
+            {
+                const alpha = Math.max(0, 1 - t * 1.8);
+                const r     = p.r * (1 + easeOut(t) * 3);
+                ctx.strokeStyle = `rgba(255,215,0,${alpha})`;
+                ctx.lineWidth   = 7 * (1 - t) + 1;
+                ctx.shadowColor = "#ffcc00";
+                ctx.shadowBlur  = 30 * alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 3. Оранжевое кольцо (чуть позади)
+            if (t < 0.75) {
+                const lt    = t / 0.75;
+                const alpha = (1 - lt) * 0.65;
+                const r     = p.r * (1 + easeOut(lt) * 5);
+                ctx.strokeStyle = `rgba(255,130,0,${alpha})`;
+                ctx.lineWidth   = 3 * (1 - lt) + 0.5;
+                ctx.shadowColor = "#ff8800";
+                ctx.shadowBlur  = 12 * alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 4. Ударная волна — тонкое быстрое кольцо
+            if (t < 0.45) {
+                const lt    = t / 0.45;
+                const alpha = (1 - lt) * 0.45;
+                const r     = p.r * (1 + lt * 7);
+                ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+                ctx.lineWidth   = 1.5;
+                ctx.shadowBlur  = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 5. Искры
+            if (p.sparks && t < 0.7) {
+                const lt = t / 0.7;
+                ctx.shadowBlur = 0;
+                for (const spark of p.sparks) {
+                    const dist  = p.r * (1 + easeOut(lt) * 4.5) * spark.len;
+                    const sx    = p.x + Math.cos(spark.angle) * dist;
+                    const sy    = p.y + Math.sin(spark.angle) * dist;
+                    const alpha = (1 - lt) * 0.95;
+                    const size  = 4 * (1 - lt * 0.6);
+                    ctx.fillStyle = lt < 0.4
+                        ? `rgba(255,255,200,${alpha})`
+                        : `rgba(255,180,50,${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // 6. Текст очков — плавно поднимается и исчезает
+            {
+                const visible = t < 0.75 ? 1 : (1 - (t - 0.75) / 0.25);
+                const rise    = easeOut(Math.min(t * 2, 1)) * 70;
+                const size    = Math.round(28 * (1 - t * 0.2));
+                ctx.shadowColor = "rgba(0,0,0,0.5)";
+                ctx.shadowBlur  = 5;
+                ctx.font      = `bold ${size}px Arial`;
+                ctx.fillStyle = `rgba(255,235,30,${visible})`;
+                ctx.textAlign = "center";
+                ctx.fillText(`+${ELEPHANT_BONUS}`, p.x, p.y - 20 - rise);
+            }
+
+            return true;
+        });
+
+        ctx.restore();
+    });
+}
+
+// ═══ Запуск игры ══════════════════════════════════════════════════════════════
 function startGame() {
     initPhysics();
     handleCollisions();
-    
-    GAME.score = 0;
-    GAME.gameOver = false;
-    GAME.allowGameOverCheck = false;   // сначала проверка выключена
-    GAME.animalsInPlay = [];
-    
-    document.getElementById("score").textContent = "0";
-    document.getElementById("restart").style.display = "none";
+    setupOverlayRendering();
+
+    GAME.score          = 0;
+    GAME.gameOver       = false;
+    GAME.allowGameOverCheck = false;
+    GAME.animalsInPlay  = [];
+    GAME.popEffects     = [];
+    GAME.mergeFlashes   = [];
+    GAME.nextAnimalType = null;
+
+    const scoreEl = ui("score");
+    if (scoreEl) scoreEl.textContent = "0";
 
     spawnNextAnimal();
     setupControls();
 
-    // // Включаем проверку Game Over только через 1.3 секунды
-    // // (даём первому животному спокойно упасть и отскочить)
-    // setTimeout(() => {
-    //     GAME.allowGameOverCheck = true;
-    // }, 1300);
-
     Matter.Events.on(GAME.engine, "afterUpdate", checkGameOver);
 }
 
+// ═══ Перезапуск (UI-элементы сохраняются) ════════════════════════════════════
 function restartGame() {
-  if (GAME.render) Matter.Render.stop(GAME.render);
-  if (GAME.runner) Matter.Runner.stop(GAME.runner);
-  
-  document.getElementById("canvas-container").innerHTML = "";
-  
-  GAME.engine = null;
-  GAME.render = null;
-  GAME.runner = null;
-  GAME.mouseConstraint = null;
-  GAME.currentAnimal = null;
-  GAME.animalsInPlay = [];
-  
-  startGame();
-}
+    // 1. Скрываем экран конца игры
+    hideGameOver();
 
+    // 2. Останавливаем старый движок
+    const oldCanvas = GAME.render ? GAME.render.canvas : null;
+    if (GAME.render)  Matter.Render.stop(GAME.render);
+    if (GAME.runner)  Matter.Runner.stop(GAME.runner);
 
-window.addEventListener("load", () => {
-  preloadTextures(() => {
+    // 3. Удаляем только Matter.js canvas (UI-элементы не трогаем)
+    if (oldCanvas && oldCanvas.parentNode) {
+        oldCanvas.parentNode.removeChild(oldCanvas);
+    }
+
+    // 4. Сбрасываем ссылки
+    GAME.engine   = null;
+    GAME.render   = null;
+    GAME.runner   = null;
+    GAME._mouse   = null;
+    GAME.currentAnimal  = null;
+    GAME.animalsInPlay  = [];
+    GAME.popEffects     = [];
+    GAME.mergeFlashes   = [];
+    GAME.nextAnimalType = null;
+
+    // 5. Запускаем заново
     startGame();
-  });
-});
-
-function adaptCanvasSize() {
-    if (!GAME.render || !GAME.render.canvas) return;
-
-    const cont = document.getElementById('canvas-container');
-    if (!cont) return;
-
-    const w = cont.clientWidth;
-    const h = cont.clientHeight || (w * 1.5);  // fallback на пропорцию
-
-    GAME.render.canvas.width = w;
-    GAME.render.canvas.height = h;
-    GAME.render.options.width = w;
-    GAME.render.options.height = h;
-    GAME.render.bounds.max.x = w;
-    GAME.render.bounds.max.y = h;
 }
 
-// Запуск при загрузке и изменении размера окна
-window.addEventListener('load', adaptCanvasSize);
-window.addEventListener('resize', adaptCanvasSize);
-window.addEventListener('orientationchange', adaptCanvasSize);
-
-// В startGame() после setupControls() добавь:
-adaptCanvasSize();
+// ═══ Старт при загрузке страницы ═════════════════════════════════════════════
+window.addEventListener("load", () => {
+    preloadTextures(startGame);
+});
