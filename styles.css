@@ -19,6 +19,23 @@ body {
     height: 100%;
     object-fit: cover;
     z-index: -2;
+
+    pointer-events: none;          /* отключает клики → убирает большинство оверлеев */
+    user-select: none;             /* предотвращает выделение и паузу по тапу (очень помогает в Safari) */
+    touch-action: none;            /* блокирует тач-события ещё жёстче */
+}
+
+#bg-video::-webkit-media-controls {
+    display: none !important;
+}
+#bg-video::-webkit-media-controls-enclosure {
+    display: none !important;
+}
+#bg-video::-webkit-media-controls-overlay-play-button {
+    display: none !important;
+}
+#bg-video::-webkit-media-controls-start-playback-button {
+    display: none !important;
 }
 
 body::after {
@@ -107,22 +124,93 @@ body::after {
 .primary   { background: linear-gradient(135deg, #ff6b6b, #ff8e53); color: white; }
 .secondary { background: linear-gradient(135deg, #4ecdc4, #556270); color: white; }
 
-.level-btn {
-    background: linear-gradient(135deg, #a8e6cf, #dcedc1);
-    color: #2d3436;
-    font-size: 1.45rem;
-    padding: 1.2rem 2rem;
-}
-
 .back-btn {
-    margin-top: 2.5rem;
-    background: #6c5ce7;
+    background: rgba(255,255,255,0.18);
     color: white;
-    padding: 0.9rem 2.2rem;
-    font-size: 1.1rem;
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+    border: 2px solid rgba(255,255,255,0.35);
+    backdrop-filter: blur(8px);
+    margin-top: 0.5rem;
 }
 
-/* Модальные окна */
+.back-btn:hover {
+    background: rgba(255,255,255,0.28);
+}
+
+/* ── Карточки уровней ───────────────────────────────── */
+.level-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 380px;
+    margin-bottom: 1rem;
+}
+
+.level-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 22px;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+    user-select: none;
+}
+
+.level-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 14px 32px rgba(0,0,0,0.35);
+}
+
+.level-card:active {
+    transform: translateY(-1px) scale(1.00);
+}
+
+.easy-card   { background: linear-gradient(135deg, #84e1bc, #2ecc71); }
+.medium-card { background: linear-gradient(135deg, #fdd08e, #f39c12); }
+.hard-card   { background: linear-gradient(135deg, #ff9a9e, #e74c3c); }
+
+.level-card-img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.2));
+}
+
+.level-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+.level-card-name {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    line-height: 1;
+}
+
+.level-card-desc {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.88);
+    font-weight: 500;
+}
+
+.level-card-stars {
+    font-size: 1rem;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
 .modal {
     display: none;
     position: fixed;
@@ -138,8 +226,7 @@ body::after {
     display: flex;
 }
 
-.modal-content,
-.tutorial-content {
+.modal-content {
     background: white;
     color: #222;
     width: 92%;
@@ -148,6 +235,18 @@ body::after {
     padding: 2rem 1.6rem;
     position: relative;
     box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+}
+
+.tutorial-content {
+    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    color: #fff;
+    width: 92%;
+    max-width: 420px;
+    border-radius: 24px;
+    padding: 2rem 1.6rem 1.6rem;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
 .close {
@@ -161,71 +260,62 @@ body::after {
 
 .close:hover { color: #333; }
 
-/* Игровой экран */
 .game-header {
-    width: 100%;
-    padding: 1rem 1.5rem;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 1.3rem;
-    color: white;
-    flex-wrap: wrap;
-    gap: 10px;
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    flex-shrink: 0;
 }
 
 .game-title { font-weight: bold; }
 
-.score { font-weight: bold; }
+.score {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 0 20px #ffeb3b;
+}
 
 .game-container {
-    position: relative;
-    width: 100%;
-    max-width: 520px;
-    margin: 1rem auto;
-    flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    flex: 1;
 }
 
 .danger-zone {
-    position: relative;
-    height: 80px;
+    position: absolute;
+    top: 60px;                  /* или сколько нужно от верха */
+    left: 0;
+    right: 0;
+    height: 6px;
+    pointer-events: none;
+    z-index: 5;
 }
 
 .danger-line-label {
-    position: absolute;
-    top: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.9rem;
-    color: #ff4d4d;
-    font-weight: bold;
-    background: rgba(255,255,255,0.85);
-    padding: 0 12px;
-    border-radius: 12px;
-    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.95);
+    color: #c62828;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
 .danger-line.thick {
-    height: 8px;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #ff4d4d;
-    box-shadow: 0 4px 20px #ff4d4d99;
+    height: 6px;
+    background: linear-gradient(90deg, #ff4d4d, #ff8e53);
+    box-shadow: 0 0 25px #ff4d4d;
+    border-radius: 3px;
 }
 
 .play-area {
-    flex: 1;
-    background: #f0f4f8;
-    border-radius: 16px;
-    overflow: hidden;
     position: relative;
-    min-height: 360px;
-    border: 2px solid #dfe6ed;
+    width: 100%;
+    flex: 1;                    /* ← займёт всё оставшееся пространство */
+    max-height: calc(100vh - 180px);  /* пример: отнимаем высоту счёта + кнопок + опасной зоны */
+    overflow: hidden;
 }
 
 .placeholder {
@@ -292,32 +382,116 @@ body::after {
     box-shadow: 0 3px 10px rgba(0,0,0,0.3);
 }
 
-.tutorial-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-top: 1.5rem;
-    flex-wrap: wrap;
+.tutorial-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 1.2rem;
+    color: #fff;
 }
 
 .tutorial-steps {
     display: flex;
     flex-direction: column;
-    gap: 1.2rem;
-    margin: 1.5rem 0;
+    gap: 0.75rem;
+    margin-bottom: 1.4rem;
 }
 
-.step {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 12px;
+.tut-step {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 0.9rem 1rem;
     text-align: center;
 }
 
-.step.warning {
-    background: #fff5f5;
-    border: 1px solid #ffcccc;
+.tut-step p {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.8);
+    margin-top: 0.5rem;
+    line-height: 1.4;
 }
+
+.tut-animals {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.tut-animals img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+}
+
+.tut-plus, .tut-arrow {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.6);
+}
+
+.tut-arrow { color: #ffe066; }
+
+.tut-warning {
+    background: rgba(255,70,70,0.15);
+    border-color: rgba(255,80,80,0.35);
+}
+
+.tut-warning p { color: rgba(255,220,220,0.9); }
+
+.tut-warning strong { color: #ff6b6b; }
+
+.tut-danger-line {
+    width: 80%;
+    height: 3px;
+    background: linear-gradient(to right, transparent, #ff4d4d, transparent);
+    margin: 0 auto 0.5rem;
+    border-radius: 3px;
+    box-shadow: 0 0 8px rgba(255,77,77,0.6);
+}
+
+.tutorial-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+.tut-btn {
+    flex: 1;
+    padding: 0.85rem 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+}
+
+.tut-btn:hover  { transform: translateY(-3px); }
+.tut-btn:active { transform: translateY(-1px); }
+
+.tut-btn-primary {
+    background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(255,100,80,0.45);
+}
+
+.tut-btn-secondary {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+}
+
+.tut-btn-secondary:hover { background: rgba(255,255,255,0.2); }
+
+/* close button override для тёмной модалки */
+.tutorial-content .close {
+    color: rgba(255,255,255,0.5);
+}
+.tutorial-content .close:hover { color: #fff; }
 
 .danger-line-preview {
     width: 100%;
@@ -330,4 +504,63 @@ body::after {
 @keyframes float {
     0%, 100% { transform: translateY(0); }
     50%      { transform: translateY(-18px); }
+}
+
+.next-bubble {
+    width: 90px;
+    height: 90px;
+    background: rgba(255,255,255,0.28);
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.65);
+    box-shadow: 0 5px 18px rgba(0,0,0,0.45),
+                inset 0 4px 12px rgba(255,255,255,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.next-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.animal-img {
+    position: absolute;
+    pointer-events: none; 
+    object-fit: contain;
+}
+
+.level-1 { width: 50px;  height: 50px; } 
+.level-2 { width: 70px;  height: 70px; } 
+.level-3 { width: 95px;  height: 95px; } 
+.level-4 { width: 125px; height: 125px; }
+.level-5 { width: 165px; height: 165px; } 
+
+.iframe-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    aspect-ratio: 540 / 650;   /* точно совпадает с размером канваса */
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+    margin: 0 auto;
+}
+
+.iframe-wrapper iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+@media (max-height: 680px) {
+    .iframe-wrapper { max-width: 310px; }
+}
+
+@media (max-width: 440px) {
+    .iframe-wrapper { max-width: calc(100vw - 24px); }
 }
